@@ -127,7 +127,7 @@ export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
       console.log('Trying direct markdown preview creation...');
       if (docManager) {
         try {
-          docManager.open(path, 'Markdown Preview', {}, { mode: 'split-right' });
+          await docManager.open(path, 'Markdown Preview', {}, { mode: 'split-right' });
         } catch (error: unknown) {
           console.error('Direct preview creation failed:', error);
         }
@@ -141,12 +141,31 @@ export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
       if (path.endsWith('.md')) {
         // Default to showing preview unless explicitly toggled off
         if (previewStates.get(path) !== false) {
-          // Wait for the widget to be ready
+          // Wait for the widget to be ready and properly attached
           widget.context.ready.then(() => {
-            // Additional delay to ensure everything is loaded
-            setTimeout(() => {
-              openMarkdownPreview(path);
-            }, 300);
+            // Ensure widget is attached to DOM before opening preview
+            if (!widget.isAttached) {
+              widget.disposed.connect(() => {
+                console.log('Widget was disposed before attachment');
+              });
+              // Wait for attachment
+              const checkAttachment = setInterval(() => {
+                if (widget.isAttached && !widget.isDisposed) {
+                  clearInterval(checkAttachment);
+                  // Additional delay to ensure everything is loaded
+                  setTimeout(() => {
+                    openMarkdownPreview(path);
+                  }, 500);
+                } else if (widget.isDisposed) {
+                  clearInterval(checkAttachment);
+                }
+              }, 50);
+            } else {
+              // Widget already attached
+              setTimeout(() => {
+                openMarkdownPreview(path);
+              }, 300);
+            }
           });
         }
       }

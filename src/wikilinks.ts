@@ -5,7 +5,7 @@ import {
 
 import { IEditorTracker } from '@jupyterlab/fileeditor';
 import { IMarkdownViewerTracker } from '@jupyterlab/markdownviewer';
-import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
+import { IRenderMimeRegistry, IRenderMime } from '@jupyterlab/rendermime';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { Dialog, showDialog } from '@jupyterlab/apputils';
 import { Contents } from '@jupyterlab/services';
@@ -121,13 +121,29 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
       rendermime.addFactory({
         safe: true,
         mimeTypes: ['text/markdown'],
-        createRenderer: () => {
-          const renderer = rendermime.createRenderer('text/markdown');
+        createRenderer: (options: IRenderMime.IRendererOptions) => {
+          const renderer = defaultFactory.createRenderer(options);
           const originalRenderModel = renderer.renderModel.bind(renderer);
           
-          renderer.renderModel = async (model: any) => {
-            // Get the markdown source
-            const source = model.data['text/markdown'] as string;
+          renderer.renderModel = async (model: IRenderMime.IMimeModel) => {
+            // Ensure model has proper structure
+            if (!model || !model.data) {
+              console.warn('Invalid model structure:', model);
+              return originalRenderModel(model);
+            }
+            
+            // Get the markdown source - handle different data structures
+            let source: string;
+            if (typeof model.data === 'string') {
+              source = model.data;
+            } else if (model.data['text/markdown']) {
+              source = model.data['text/markdown'] as string;
+            } else if (model.data['text/plain']) {
+              source = model.data['text/plain'] as string;
+            } else {
+              console.warn('No markdown content found in model:', model);
+              return originalRenderModel(model);
+            }
             
             // Parse wikilinks
             const links = parseWikilinks(source);
@@ -160,13 +176,15 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
               offset += replacement.length - link.fullMatch.length;
             }
             
-            // Update the model with processed source
+            // Update the model with processed source - handle metadata
             const processedModel = {
               ...model,
-              data: {
+              data: typeof model.data === 'string' ? { 'text/markdown': processedSource } : {
                 ...model.data,
                 'text/markdown': processedSource
-              }
+              },
+              metadata: model.metadata || {},
+              trusted: model.trusted !== undefined ? model.trusted : true
             };
             
             // Render with the original method
@@ -174,51 +192,81 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
             
             // Add click handlers to wikilinks after rendering
             setTimeout(() => {
+              // Check if renderer is still valid and attached
+              if (!renderer.node || !renderer.node.isConnected) {
+                console.warn('Renderer node is not connected to DOM');
+                return;
+              }
+              
               const node = renderer.node;
               const wikilinks = node.querySelectorAll('.pkm-wikilink');
               
               wikilinks.forEach((link: Element) => {
-                link.addEventListener('click', async (event: Event) => {
+                // Remove any existing click handlers to prevent duplicates
+                const newLink = link.cloneNode(true) as Element;
+                link.parentNode?.replaceChild(newLink, link);
+                
+                newLink.addEventListener('click', async (event: Event) => {
                   event.preventDefault();
-                  const target = link as HTMLAnchorElement;
+                  event.stopPropagation();
+                  const target = newLink as HTMLAnchorElement;
                   
-                  if (target.classList.contains('pkm-wikilink-broken')) {
-                    // Handle broken link - prompt to create file
-                    const targetName = target.dataset.target!;
-                    const result = await showDialog({
-                      title: 'Create New Note',
-                      body: `Create new note "${targetName}"?`,
-                      buttons: [
-                        Dialog.cancelButton(),
-                        Dialog.okButton({ label: 'Create' })
-                      ]
-                    });
-                    
-                    if (result.button.accept) {
-                      // Get current directory from the current file
-                      const currentWidget = markdownTracker.currentWidget || editorTracker.currentWidget;
-                      const currentPath = currentWidget?.context.path || '';
-                      const currentDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
-                      
-                      // Create new file
-                      const newPath = currentDir ? `${currentDir}/${targetName}.md` : `${targetName}.md`;
-                      await docManager.services.contents.save(newPath, {
-                        type: 'file',
-                        format: 'text',
-                        content: `# ${targetName}\n\n`
+                  try {
+                    if (target.classList.contains('pkm-wikilink-broken')) {
+                      // Handle broken link - prompt to create file
+                      const targetName = target.dataset.target!;
+                      const result = await showDialog({
+                        title: 'Create New Note',
+                        body: `Create new note "${targetName}"?`,
+                        buttons: [
+                          Dialog.cancelButton(),
+                          Dialog.okButton({ label: 'Create' })
+                        ]
                       });
                       
-                      // Open the new file
-                      await docManager.openOrReveal(newPath);
+                      if (result.button.accept) {
+                        // Get current directory from the current file
+                        const currentWidget = markdownTracker.currentWidget || editorTracker.currentWidget;
+                        const currentPath = currentWidget?.context.path || '';
+                        const currentDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                        
+                        // Create new file
+                        const newPath = currentDir ? `${currentDir}/${targetName}.md` : `${targetName}.md`;
+                        await docManager.services.contents.save(newPath, {
+                          type: 'file',
+                          format: 'text',
+                          content: `# ${targetName}\n\n`
+                        });
+                        
+                        // Open the new file in the main area (left panel)
+                        const widget = await docManager.openOrReveal(newPath, {
+                          mode: 'split-left',
+                          ref: '_noref'
+                        });
+                        
+                        // Enable auto-save for the new document
+                        if (widget && widget.context) {
+                          widget.context.model.sharedModel.changed.connect(() => {
+                            if (widget.context.model.dirty) {
+                              widget.context.save();
+                            }
+                          });
+                        }
+                      }
+                    } else {
+                      // Handle existing link - open the file in the main area (left panel)
+                      const path = target.dataset.path!;
+                      await docManager.openOrReveal(path, {
+                        mode: 'split-left',
+                        ref: '_noref'
+                      });
                     }
-                  } else {
-                    // Handle existing link - open the file
-                    const path = target.dataset.path!;
-                    await docManager.openOrReveal(path);
+                  } catch (error) {
+                    console.error('Error handling wikilink click:', error);
                   }
                 });
               });
-            }, 0);
+            }, 100);
           };
           
           return renderer;
