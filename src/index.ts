@@ -12,6 +12,7 @@ import { wikilinkPlugin } from './wikilinks';
 import { searchPlugin } from './search';
 import { backlinksPlugin } from './backlinks';
 import { notebookEmbedPlugin } from './notebook-embed';
+import { welcomePlugin } from './welcome';
 
 /**
  * The main extension that combines all PKM features
@@ -36,6 +37,7 @@ const extension: JupyterFrontEndPlugin<void> = {
  */
 export default [
   extension,
+  welcomePlugin,
   markdownPreviewPlugin,
   wikilinkPlugin,
   searchPlugin,

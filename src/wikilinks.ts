@@ -156,13 +156,22 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
               const linkPath = await findMarkdownFile(docManager, link.target);
               const displayText = link.display || link.target;
               
+              // Escape any quotes in the attributes to prevent HTML injection
+              const escapedPath = linkPath ? linkPath.replace(/"/g, '&quot;') : '';
+              const escapedTarget = link.target.replace(/"/g, '&quot;');
+              const escapedDisplay = displayText.replace(/"/g, '&quot;');
+              
               let replacement: string;
               if (linkPath) {
                 // File exists - create a clickable link
-                replacement = `<a href="#" class="pkm-wikilink" data-path="${linkPath}">${displayText}</a>`;
+                // Use a format that JupyterLab's commandlinker won't interfere with
+                // We'll encode our data in the href as a special protocol
+                const encodedData = encodeURIComponent(JSON.stringify({ path: linkPath, target: link.target }));
+                replacement = `<a href="pkm-wikilink:${encodedData}" class="pkm-wikilink" data-path="${escapedPath}" data-target="${escapedTarget}" data-wikilink="true">${escapedDisplay}</a>`;
               } else {
                 // File doesn't exist - create a broken link
-                replacement = `<a href="#" class="pkm-wikilink pkm-wikilink-broken" data-target="${link.target}">${displayText}</a>`;
+                const encodedData = encodeURIComponent(JSON.stringify({ path: '', target: link.target }));
+                replacement = `<a href="pkm-wikilink:${encodedData}" class="pkm-wikilink pkm-wikilink-broken" data-target="${escapedTarget}" data-path="" data-wikilink="true">${escapedDisplay}</a>`;
               }
               
               const adjustedStart = link.startIndex + offset;
@@ -199,22 +208,98 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
               }
               
               const node = renderer.node;
-              const wikilinks = node.querySelectorAll('.pkm-wikilink');
+              // JupyterLab transforms our links, so we need to find them by class or by checking commandlinker-args
+              const allLinks = node.querySelectorAll('a');
+              const wikilinks: Element[] = [];
+              
+              allLinks.forEach((link: Element) => {
+                // Check if it's our wikilink by class, attributes, or custom protocol
+                const href = link.getAttribute('href');
+                const commandlinkerArgs = link.getAttribute('commandlinker-args');
+                const isWikilink = link.classList.contains('pkm-wikilink') || 
+                                  link.hasAttribute('data-wikilink') ||
+                                  link.hasAttribute('data-target') ||
+                                  link.hasAttribute('data-path') ||
+                                  (href && href.startsWith('pkm-wikilink:'));
+                
+                // Also check if commandlinker-args contains our wikilink data
+                if (isWikilink || (commandlinkerArgs && commandlinkerArgs.includes('"path"'))) {
+                  wikilinks.push(link);
+                }
+              });
+              
+              console.log(`Found ${wikilinks.length} wikilinks in rendered content`);
               
               wikilinks.forEach((link: Element) => {
                 // Remove any existing click handlers to prevent duplicates
-                const newLink = link.cloneNode(true) as Element;
+                const newLink = link.cloneNode(true) as HTMLAnchorElement;
                 link.parentNode?.replaceChild(newLink, link);
                 
                 newLink.addEventListener('click', async (event: Event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  const target = newLink as HTMLAnchorElement;
                   
                   try {
-                    if (target.classList.contains('pkm-wikilink-broken')) {
+                    // First try to get data from our custom attributes
+                    let path = newLink.dataset?.path || newLink.getAttribute('data-path');
+                    let targetName = newLink.dataset?.target || newLink.getAttribute('data-target');
+                    const isBrokenClass = newLink.classList.contains('pkm-wikilink-broken');
+                    
+                    // Try to extract from our custom protocol in href
+                    const href = newLink.getAttribute('href');
+                    if (href && href.startsWith('pkm-wikilink:')) {
+                      try {
+                        const encodedData = href.substring('pkm-wikilink:'.length);
+                        const data = JSON.parse(decodeURIComponent(encodedData));
+                        path = data.path || path;
+                        targetName = data.target || targetName;
+                      } catch (e) {
+                        console.error('Failed to parse pkm-wikilink data:', e);
+                      }
+                    }
+                    
+                    // If JupyterLab has transformed our link, extract data from commandlinker-args
+                    const commandlinkerArgs = newLink.getAttribute('commandlinker-args');
+                    if (commandlinkerArgs && !path && !targetName) {
+                      try {
+                        const args = JSON.parse(commandlinkerArgs);
+                        if (args.path !== undefined) {
+                          path = args.path;
+                        }
+                        // Extract target from the link text or href
+                        targetName = newLink.textContent || '';
+                        // If the link has been transformed to have an href, extract from there
+                        if (href && href !== '#' && !href.startsWith('pkm-wikilink:')) {
+                          // Extract filename from href
+                          const match = href.match(/([^/]+)(?:\.md)?$/);
+                          if (match) {
+                            targetName = match[1];
+                          }
+                        }
+                      } catch (e) {
+                        console.error('Failed to parse commandlinker-args:', e);
+                      }
+                    }
+                    
+                    // Log for debugging
+                    console.log('Wikilink clicked:', {
+                      path,
+                      targetName,
+                      classList: newLink.classList.toString(),
+                      commandlinkerArgs,
+                      href: newLink.getAttribute('href'),
+                      text: newLink.textContent
+                    });
+                    
+                    const isBroken = isBrokenClass || !path || path === '';
+                    
+                    if (isBroken) {
                       // Handle broken link - prompt to create file
-                      const targetName = target.dataset.target!;
+                      if (!targetName) {
+                        console.error('Target name is undefined for broken wikilink');
+                        return;
+                      }
+                      
                       const result = await showDialog({
                         title: 'Create New Note',
                         body: `Create new note "${targetName}"?`,
@@ -228,10 +313,16 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                         // Get current directory from the current file
                         const currentWidget = markdownTracker.currentWidget || editorTracker.currentWidget;
                         const currentPath = currentWidget?.context.path || '';
-                        const currentDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                        const currentDir = currentPath ? currentPath.substring(0, currentPath.lastIndexOf('/')) : '';
                         
-                        // Create new file
-                        const newPath = currentDir ? `${currentDir}/${targetName}.md` : `${targetName}.md`;
+                        // Ensure targetName has .md extension
+                        const fileName = targetName.endsWith('.md') ? targetName : `${targetName}.md`;
+                        
+                        // Create new file path
+                        const newPath = currentDir ? `${currentDir}/${fileName}` : fileName;
+                        
+                        console.log('Creating new file at:', newPath);
+                        
                         await docManager.services.contents.save(newPath, {
                           type: 'file',
                           format: 'text',
@@ -239,7 +330,7 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                         });
                         
                         // Open the new file in the main area (left panel)
-                        const widget = await docManager.openOrReveal(newPath, {
+                        const widget = await docManager.openOrReveal(newPath, undefined, undefined, {
                           mode: 'split-left',
                           ref: '_noref'
                         });
@@ -255,14 +346,21 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                       }
                     } else {
                       // Handle existing link - open the file in the main area (left panel)
-                      const path = target.dataset.path!;
-                      await docManager.openOrReveal(path, {
-                        mode: 'split-left',
-                        ref: '_noref'
-                      });
+                      console.log('Opening file at:', path);
+                      
+                      if (path) {
+                        await docManager.openOrReveal(path, undefined, undefined, {
+                          mode: 'split-left',
+                          ref: '_noref'
+                        });
+                      } else {
+                        console.error('Path is null or undefined for wikilink');
+                      }
                     }
                   } catch (error) {
                     console.error('Error handling wikilink click:', error);
+                    console.error('Target element:', newLink);
+                    console.error('All attributes:', Array.from(newLink.attributes).map(attr => ({ name: attr.name, value: attr.value })));
                   }
                 });
               });
@@ -298,5 +396,27 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
       }
     `;
     document.head.appendChild(style);
+    
+    // Set up auto-save for all markdown files
+    editorTracker.widgetAdded.connect((sender, widget) => {
+      if (widget.context.path.endsWith('.md')) {
+        // Enable auto-save with a 2-second delay
+        let saveTimeout: NodeJS.Timeout | null = null;
+        
+        widget.context.model.contentChanged.connect(() => {
+          if (saveTimeout) {
+            clearTimeout(saveTimeout);
+          }
+          
+          saveTimeout = setTimeout(() => {
+            if (widget.context.model.dirty) {
+              widget.context.save().catch(error => {
+                console.error('Auto-save failed:', error);
+              });
+            }
+          }, 2000);
+        });
+      }
+    });
   }
 };
