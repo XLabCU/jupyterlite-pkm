@@ -1,0 +1,7 @@
+/* Main CSS file for JupyterLite PKM Extension */
+
+/* Import JupyterLab CSS variables */
+@import url('~@jupyterlab/application/style/index.css');
+
+/* Extension-specific styles can be added here */
+/* Most styles are injected dynamically by the plugins */
