@@ -258,23 +258,19 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                       }
                     }
                     
-                    // If JupyterLab has transformed our link, extract data from commandlinker-args
+                    // If still no targetName, try to extract from link text as fallback
+                    if (!targetName) {
+                      targetName = newLink.textContent?.trim() || '';
+                    }
+                    
+                    // If JupyterLab has transformed our link, try extracting from commandlinker-args
                     const commandlinkerArgs = newLink.getAttribute('commandlinker-args');
-                    if (commandlinkerArgs && !path && !targetName) {
+                    if (commandlinkerArgs) {
                       try {
                         const args = JSON.parse(commandlinkerArgs);
-                        if (args.path !== undefined) {
+                        // Only update path if we don't have it yet
+                        if (!path && args.path !== undefined) {
                           path = args.path;
-                        }
-                        // Extract target from the link text or href
-                        targetName = newLink.textContent || '';
-                        // If the link has been transformed to have an href, extract from there
-                        if (href && href !== '#' && !href.startsWith('pkm-wikilink:')) {
-                          // Extract filename from href
-                          const match = href.match(/([^/]+)(?:\.md)?$/);
-                          if (match) {
-                            targetName = match[1];
-                          }
                         }
                       } catch (e) {
                         console.error('Failed to parse commandlinker-args:', e);
@@ -291,12 +287,20 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                       text: newLink.textContent
                     });
                     
-                    const isBroken = isBrokenClass || !path || path === '';
+                    // A link is broken ONLY if it explicitly has the broken class
+                    // Don't assume it's broken just because we can't extract the path from transformed HTML
+                    const isBroken = isBrokenClass;
                     
                     if (isBroken) {
                       // Handle broken link - prompt to create file
-                      if (!targetName) {
-                        console.error('Target name is undefined for broken wikilink');
+                      if (!targetName || targetName.trim() === '') {
+                        console.error('Target name is undefined for broken wikilink', {
+                          element: newLink,
+                          classList: newLink.classList.toString(),
+                          text: newLink.textContent,
+                          href: newLink.getAttribute('href'),
+                          allAttributes: Array.from(newLink.attributes).map(a => `${a.name}="${a.value}"`).join(' ')
+                        });
                         return;
                       }
                       
@@ -345,16 +349,29 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                         }
                       }
                     } else {
-                      // Handle existing link - open the file in the main area (left panel)
-                      console.log('Opening file at:', path);
+                      // Handle existing link - open the file
+                      console.log('Opening existing file. Path from data:', path, 'Target:', targetName);
                       
-                      if (path) {
+                      if (path && path !== '' && path !== '#') {
+                        // We have a valid path, open it
                         await docManager.openOrReveal(path, undefined, undefined, {
                           mode: 'split-left',
                           ref: '_noref'
                         });
+                      } else if (targetName) {
+                        // No path but we have targetName - try to find the file
+                        const foundPath = await findMarkdownFile(docManager, targetName);
+                        if (foundPath) {
+                          console.log('Found file at:', foundPath);
+                          await docManager.openOrReveal(foundPath, undefined, undefined, {
+                            mode: 'split-left',
+                            ref: '_noref'
+                          });
+                        } else {
+                          console.error('Could not find file for target:', targetName);
+                        }
                       } else {
-                        console.error('Path is null or undefined for wikilink');
+                        console.error('No path or target name available for existing wikilink');
                       }
                     }
                   } catch (error) {

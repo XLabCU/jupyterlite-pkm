@@ -23,9 +23,10 @@
 ### 3. Panel Management
 - **Current**: Files open in unpredictable panels
 - **Desired**: 
-  - Markdown source files: Always open in left panel, one at a time
+  - Markdown source files: Always open in left panel, one at a time. No tabbing.
   - Rendered markdown: Always open in right panel, one at a time
 - **Next Steps**: Implement proper panel management in file opening logic
+- **ALTERNATIVELY**: Investigate feasibility of a 'live preview' where markdown is rendered as soon as it is typed
 
 ## Desired Enhancement
 
