@@ -2,6 +2,7 @@ import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
+import { pkmState } from './state';
 
 import { IEditorTracker } from '@jupyterlab/fileeditor';
 import { IMarkdownViewerTracker } from '@jupyterlab/markdownviewer';
@@ -29,37 +30,101 @@ interface WikiLink {
 }
 
 /**
- * Parse wikilinks from text
+ * Find all code spans in the text (inline code with backticks)
+ */
+function findCodeSpans(text: string): Array<{start: number, end: number}> {
+  const codeSpans: Array<{start: number, end: number}> = [];
+  
+  // Match both single and multiple backticks
+  const codeRegex = /(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g;
+  let match;
+  
+  while ((match = codeRegex.exec(text)) !== null) {
+    codeSpans.push({
+      start: match.index,
+      end: match.index + match[0].length
+    });
+  }
+  
+  return codeSpans;
+}
+
+/**
+ * Check if a position is inside any code span
+ */
+function isInsideCodeSpan(position: number, codeSpans: Array<{start: number, end: number}>): boolean {
+  return codeSpans.some(span => position >= span.start && position < span.end);
+}
+
+/**
+ * Parse wikilinks from text, excluding those inside code spans
  */
 function parseWikilinks(text: string): WikiLink[] {
   const links: WikiLink[] = [];
+  const codeSpans = findCodeSpans(text);
   let match;
 
   WIKILINK_REGEX.lastIndex = 0; // Reset regex state
   while ((match = WIKILINK_REGEX.exec(text)) !== null) {
-    links.push({
-      fullMatch: match[0],
-      target: match[1].trim(),
-      display: match[2]?.trim(),
-      startIndex: match.index,
-      endIndex: match.index + match[0].length
-    });
+    // Skip wikilinks that are inside code spans
+    if (!isInsideCodeSpan(match.index, codeSpans)) {
+      links.push({
+        fullMatch: match[0],
+        target: match[1].trim(),
+        display: match[2]?.trim(),
+        startIndex: match.index,
+        endIndex: match.index + match[0].length
+      });
+    }
   }
 
   return links;
 }
 
 /**
- * Find markdown file by name across all directories
+ * Supported file extensions for wikilinks
  */
-async function findMarkdownFile(
+const SUPPORTED_EXTENSIONS = ['.md', '.ipynb', '.csv', '.json', '.geojson'];
+
+/**
+ * Get the appropriate file extension based on the filename
+ */
+function getFileExtension(filename: string): string {
+  // If filename already has a supported extension, use it
+  for (const ext of SUPPORTED_EXTENSIONS) {
+    if (filename.endsWith(ext)) {
+      return ext;
+    }
+  }
+  
+  // Default to .md for files without extension
+  return '.md';
+}
+
+/**
+ * Get the base name without extension
+ */
+function getBaseName(filename: string): string {
+  for (const ext of SUPPORTED_EXTENSIONS) {
+    if (filename.endsWith(ext)) {
+      return filename.slice(0, -ext.length);
+    }
+  }
+  return filename;
+}
+
+/**
+ * Find file by name across all directories, supporting multiple extensions
+ */
+async function findFile(
   docManager: IDocumentManager,
   filename: string
 ): Promise<string | null> {
   const contents = docManager.services.contents;
   
-  // Add .md extension if not present
-  const targetName = filename.endsWith('.md') ? filename : `${filename}.md`;
+  // Determine target filename with proper extension
+  const targetName = filename.includes('.') ? filename : `${filename}.md`;
+  console.log('Searching for file:', filename, '-> target:', targetName);
 
   async function searchDirectory(path: string): Promise<string | null> {
     try {
@@ -69,8 +134,12 @@ async function findMarkdownFile(
         return null;
       }
 
+      console.log(`Searching in directory: ${path || 'root'}, found ${listing.content.length} items`);
+      
       for (const item of listing.content as Contents.IModel[]) {
-        if (item.type === 'file' && item.name === targetName) {
+        console.log(`  - ${item.name} (${item.type})`);
+        if ((item.type === 'file' || item.type === 'notebook') && item.name === targetName) {
+          console.log(`Found match: ${item.path}`);
           return item.path;
         } else if (item.type === 'directory') {
           const found = await searchDirectory(item.path);
@@ -153,7 +222,9 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
             let offset = 0;
             
             for (const link of links) {
-              const linkPath = await findMarkdownFile(docManager, link.target);
+              console.log('Processing wikilink:', link.target);
+              const linkPath = await findFile(docManager, link.target);
+              console.log('Found path for', link.target, ':', linkPath);
               const displayText = link.display || link.target;
               
               // Escape any quotes in the attributes to prevent HTML injection
@@ -326,25 +397,88 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                         const currentPath = currentWidget?.context.path || '';
                         const currentDir = currentPath ? currentPath.substring(0, currentPath.lastIndexOf('/')) : '';
                         
-                        // Ensure targetName has .md extension
-                        const fileName = targetName.endsWith('.md') ? targetName : `${targetName}.md`;
+                        // Determine the appropriate file extension and content
+                        const extension = getFileExtension(targetName);
+                        const baseName = getBaseName(targetName);
+                        const fileName = targetName.includes('.') ? targetName : `${targetName}${extension}`;
                         
                         // Create new file path
                         const newPath = currentDir ? `${currentDir}/${fileName}` : fileName;
                         
                         console.log('Creating new file at:', newPath);
                         
+                        if (extension === '.ipynb') {
+                          // Use JupyterLab's built-in notebook creation
+                          try {
+                            // Create notebook using the notebook factory
+                            const widget = await docManager.createNew(newPath, 'notebook');
+                            if (widget) {
+                              console.log('Created notebook successfully:', newPath);
+                              return; // Exit early since we've created and opened the notebook
+                            }
+                          } catch (error) {
+                            console.error('Failed to create notebook with factory, trying manual creation:', error);
+                            // Fall back to manual creation if factory fails
+                          }
+                        }
+                        
+                        // Create appropriate content based on file type
+                        let content: string;
+                        let format: 'text' | 'json' = 'text';
+                        
+                        switch (extension) {
+                          case '.ipynb':
+                            // Fallback manual creation with a very basic template
+                            content = JSON.stringify({
+                              cells: [],
+                              metadata: {
+                                kernelspec: {
+                                  display_name: 'Python 3',
+                                  language: 'python',
+                                  name: 'python3'
+                                }
+                              },
+                              nbformat: 4,
+                              nbformat_minor: 4
+                            }, null, 2);
+                            format = 'json';
+                            break;
+                          case '.json':
+                            content = JSON.stringify({
+                              name: baseName,
+                              description: 'Description here'
+                            }, null, 2);
+                            format = 'json';
+                            break;
+                          case '.geojson':
+                            content = JSON.stringify({
+                              type: 'FeatureCollection',
+                              features: []
+                            }, null, 2);
+                            format = 'json';
+                            break;
+                          case '.csv':
+                            content = 'name,value\nexample,1\n';
+                            break;
+                          default: // .md
+                            content = `# ${baseName}\n\n`;
+                            break;
+                        }
+                        
                         await docManager.services.contents.save(newPath, {
                           type: 'file',
-                          format: 'text',
-                          content: `# ${targetName}\n\n`
+                          format: format,
+                          content: content
                         });
                         
-                        // Open the new file in the main area (left panel)
-                        const widget = await docManager.openOrReveal(newPath, undefined, undefined, {
-                          mode: 'split-left',
-                          ref: '_noref'
-                        });
+                        // Open the new file with appropriate factory
+                        let factory: string | undefined = undefined;
+                        if (extension === '.md') {
+                          factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+                        }
+                        // For other file types, let JupyterLab choose the default factory
+                        
+                        const widget = await docManager.openOrReveal(newPath, factory);
                         
                         // Enable auto-save for the new document
                         if (widget && widget.context) {
@@ -360,20 +494,32 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                       console.log('Opening existing file. Path from data:', path, 'Target:', targetName);
                       
                       if (path && path !== '' && path !== '#') {
-                        // We have a valid path, open it
-                        await docManager.openOrReveal(path, undefined, undefined, {
-                          mode: 'split-left',
-                          ref: '_noref'
-                        });
+                        // We have a valid path, open it in the appropriate mode
+                        let factory: string | undefined = undefined;
+                        
+                        // Only use markdown mode for .md files
+                        if (path.endsWith('.md')) {
+                          factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+                        }
+                        // For other file types, let JupyterLab choose the default factory
+                        
+                        await docManager.openOrReveal(path, factory);
                       } else if (targetName) {
                         // No path but we have targetName - try to find the file
-                        const foundPath = await findMarkdownFile(docManager, targetName);
+                        const foundPath = await findFile(docManager, targetName);
                         if (foundPath) {
                           console.log('Found file at:', foundPath);
-                          await docManager.openOrReveal(foundPath, undefined, undefined, {
-                            mode: 'split-left',
-                            ref: '_noref'
-                          });
+                          
+                          // Use appropriate factory based on file type
+                          let factory: string | undefined = undefined;
+                          
+                          // Only use markdown mode for .md files
+                          if (foundPath.endsWith('.md')) {
+                            factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+                          }
+                          // For other file types, let JupyterLab choose the default factory
+                          
+                          await docManager.openOrReveal(foundPath, factory);
                         } else {
                           console.error('Could not find file for target:', targetName);
                         }

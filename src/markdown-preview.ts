@@ -3,199 +3,341 @@ import {
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 
-import { ICommandPalette } from '@jupyterlab/apputils';
+import { ICommandPalette, showDialog, Dialog } from '@jupyterlab/apputils';
+import { IStateDB } from '@jupyterlab/statedb';
 import { IEditorTracker } from '@jupyterlab/fileeditor';
 import { IMarkdownViewerTracker } from '@jupyterlab/markdownviewer';
 import { IDocumentManager } from '@jupyterlab/docmanager';
+import { Widget } from '@lumino/widgets';
+import { pkmState } from './state';
 
-const COMMAND_TOGGLE_PREVIEW = 'pkm:toggle-markdown-preview';
+const COMMAND_TOGGLE_MODE = 'pkm:toggle-markdown-mode';
+const COMMAND_OPEN_START = 'pkm:open-start-file';
+const STATE_KEY = 'pkm:markdown-mode';
 
 /**
- * Plugin to auto-open markdown preview and provide toggle functionality
+ * Plugin for global markdown mode toggle and startup behavior
  */
 export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
-  id: '@jupyterlite/pkm-extension:markdown-preview',
-  description: 'Auto-open markdown preview for .md files',
+  id: '@jupyterlite/pkm-extension:markdown-mode',
+  description: 'Global markdown mode toggle and startup file',
   autoStart: true,
-  requires: [IEditorTracker, IMarkdownViewerTracker, IDocumentManager],
+  requires: [IEditorTracker, IMarkdownViewerTracker, IDocumentManager, IStateDB],
   optional: [ICommandPalette],
   activate: (
     app: JupyterFrontEnd,
     editorTracker: IEditorTracker,
     markdownTracker: IMarkdownViewerTracker,
     docManager: IDocumentManager,
+    stateDB: IStateDB,
     palette: ICommandPalette | null
   ) => {
-    console.log('Markdown preview plugin activated');
+    console.log('PKM Markdown mode plugin activated');
     
-    // Log available commands for debugging
-    console.log('Available markdown viewer commands:', 
-      Array.from(app.commands.listCommands()).filter(cmd => cmd.includes('markdown')));
-
-    // Track which files have their preview state toggled
-    const previewStates = new Map<string, boolean>();
-
-    // Add command to toggle preview
-    app.commands.addCommand(COMMAND_TOGGLE_PREVIEW, {
-      label: 'Toggle Markdown Preview',
-      execute: () => {
-        const widget = editorTracker.currentWidget;
-        if (!widget) {
-          return;
-        }
-
-        const path = widget.context.path;
-        if (!path.endsWith('.md')) {
-          return;
-        }
-
-        // Toggle preview state for this file
-        const currentState = previewStates.get(path) ?? true;
-        previewStates.set(path, !currentState);
-
-        if (!currentState) {
-          // Show preview using helper function
-          openMarkdownPreview(path);
-        } else {
-          // Hide preview - find and close the preview widget
-          markdownTracker.forEach(viewer => {
-            if (viewer.context.path === path) {
-              viewer.close();
-            }
-          });
-        }
-      },
-      isEnabled: () => {
-        const widget = editorTracker.currentWidget;
-        return widget !== null && widget.context.path.endsWith('.md');
+    // Load saved mode from state
+    stateDB.fetch(STATE_KEY).then((value: any) => {
+      if (value === 'preview' || value === 'edit') {
+        pkmState.setMarkdownMode(value as 'edit' | 'preview');
       }
     });
 
-    // Add command to palette
+    // Create mode toggle button widget
+    const createModeToggleWidget = (): Widget => {
+      const widget = new Widget();
+      widget.addClass('pkm-mode-toggle');
+      widget.node.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        background: var(--jp-layout-color0, #ffffff);
+        border: 2px solid var(--jp-brand-color1, #1976d2);
+        border-radius: 8px;
+        padding: 12px;
+        margin: 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        max-width: 90vw;
+      `;
+      
+      widget.node.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <button id="pkm-mode-btn" style="
+            padding: 8px 16px; 
+            border: 2px solid var(--jp-brand-color1, #1976d2); 
+            background: var(--jp-brand-color1, #1976d2);
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+          ">
+            📝 Edit Mode
+          </button>
+          <span style="color: var(--jp-ui-font-color1); font-size: 14px; font-weight: 500;">
+            Markdown files will open in edit mode
+          </span>
+          <span style="color: var(--jp-ui-font-color2); font-size: 12px; margin-left: auto;">
+            Press Alt+M to toggle
+          </span>
+        </div>
+      `;
+      
+      const button = widget.node.querySelector('#pkm-mode-btn') as HTMLButtonElement;
+      const statusSpan = widget.node.querySelector('span') as HTMLSpanElement;
+      
+      const updateButton = () => {
+        if (pkmState.markdownMode === 'edit') {
+          button.innerHTML = '📝 Edit Mode';
+          button.style.background = 'var(--jp-brand-color1, #1976d2)';
+          button.style.borderColor = 'var(--jp-brand-color1, #1976d2)';
+          statusSpan.textContent = 'Markdown files will open in edit mode';
+        } else {
+          button.innerHTML = '👁 Preview Mode';
+          button.style.background = 'var(--jp-warn-color1, #ff9800)';
+          button.style.borderColor = 'var(--jp-warn-color1, #ff9800)';
+          statusSpan.textContent = 'Markdown files will open in preview mode';
+        }
+      };
+      
+      // Add hover effect
+      button.addEventListener('mouseenter', () => {
+        button.style.opacity = '0.8';
+      });
+      
+      button.addEventListener('mouseleave', () => {
+        button.style.opacity = '1';
+      });
+      
+      button.addEventListener('click', async () => {
+        const oldMode = pkmState.markdownMode;
+        const newMode = pkmState.markdownMode === 'edit' ? 'preview' : 'edit';
+        pkmState.setMarkdownMode(newMode);
+        stateDB.save(STATE_KEY, newMode);
+        updateButton();
+        
+        // Show brief confirmation
+        const originalText = statusSpan.textContent;
+        statusSpan.textContent = 'Mode changed!';
+        statusSpan.style.color = 'var(--jp-success-color1, #4caf50)';
+        setTimeout(() => {
+          statusSpan.textContent = originalText;
+          statusSpan.style.color = 'var(--jp-ui-font-color1)';
+        }, 1000);
+
+        // Switch the current file to the new mode if it's a markdown file
+        // Find the currently active markdown file
+        let currentWidget = null;
+        let currentPath = '';
+        
+        if (oldMode === 'edit') {
+          // We were in edit mode, check editor tracker
+          currentWidget = editorTracker.currentWidget;
+          if (currentWidget && currentWidget.context.path.endsWith('.md')) {
+            currentPath = currentWidget.context.path;
+          }
+        } else {
+          // We were in preview mode, check viewer tracker
+          currentWidget = markdownTracker.currentWidget;
+          if (currentWidget && currentWidget.context.path.endsWith('.md')) {
+            currentPath = currentWidget.context.path;
+          }
+        }
+        
+        if (currentWidget && currentPath) {
+          try {
+            // Close the current widget
+            currentWidget.close();
+            
+            // Small delay to ensure cleanup
+            setTimeout(async () => {
+              try {
+                // Open in the new mode
+                const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+                await docManager.openOrReveal(currentPath, factory);
+                
+                console.log(`Switched ${currentPath} from ${oldMode} to ${pkmState.markdownMode} mode`);
+              } catch (error) {
+                console.error('Failed to reopen file:', error);
+              }
+            }, 100);
+          } catch (error) {
+            console.error('Failed to close current widget:', error);
+          }
+        }
+      });
+      
+      // Listen for mode changes from other sources
+      pkmState.markdownModeChanged.connect(updateButton);
+      
+      updateButton();
+      return widget;
+    };
+
+    // Add toggle command
+    app.commands.addCommand(COMMAND_TOGGLE_MODE, {
+      label: 'Toggle Markdown Mode (Edit/Preview)',
+      execute: async () => {
+        const oldMode = pkmState.markdownMode;
+        const newMode = pkmState.markdownMode === 'edit' ? 'preview' : 'edit';
+        pkmState.setMarkdownMode(newMode);
+        stateDB.save(STATE_KEY, newMode);
+        
+        // Switch the current file to the new mode if it's a markdown file
+        // Find the currently active markdown file
+        let currentWidget = null;
+        let currentPath = '';
+        
+        if (oldMode === 'edit') {
+          // We were in edit mode, check editor tracker
+          currentWidget = editorTracker.currentWidget;
+          if (currentWidget && currentWidget.context.path.endsWith('.md')) {
+            currentPath = currentWidget.context.path;
+          }
+        } else {
+          // We were in preview mode, check viewer tracker
+          currentWidget = markdownTracker.currentWidget;
+          if (currentWidget && currentWidget.context.path.endsWith('.md')) {
+            currentPath = currentWidget.context.path;
+          }
+        }
+        
+        if (currentWidget && currentPath) {
+          try {
+            // Close the current widget
+            currentWidget.close();
+            
+            // Small delay to ensure cleanup
+            setTimeout(async () => {
+              try {
+                // Open in the new mode
+                const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+                await docManager.openOrReveal(currentPath, factory);
+                
+                console.log(`Switched ${currentPath} from ${oldMode} to ${pkmState.markdownMode} mode via keyboard`);
+              } catch (error) {
+                console.error('Failed to reopen file:', error);
+              }
+            }, 100);
+          } catch (error) {
+            console.error('Failed to close current widget:', error);
+          }
+        }
+        
+        // Show current mode
+        showDialog({
+          title: 'Markdown Mode Changed',
+          body: `Markdown files will now open in ${pkmState.markdownMode} mode`,
+          buttons: [Dialog.okButton()]
+        });
+      }
+    });
+
+    // Add command to open start.md
+    app.commands.addCommand(COMMAND_OPEN_START, {
+      label: 'Open Start File',
+      execute: async () => {
+        try {
+          const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+          await docManager.openOrReveal('start.md', factory);
+        } catch (error) {
+          console.log('start.md not found, creating it...');
+          // Create start.md if it doesn't exist
+          try {
+            await docManager.services.contents.save('start.md', {
+              type: 'file',
+              format: 'text',
+              content: `# Welcome to Your PKM System
+
+This is your starting note. Try creating wikilinks:
+
+- [[My First Note]] - Creates a new note
+- [[https://example.com|External Link]] - Links to external sites
+
+## Features:
+- **Wikilinks**: Use [[Note Name]] syntax
+- **Search**: Cmd+Shift+F to search all notes  
+- **Auto-save**: Your changes are saved automatically
+- **Mode Toggle**: Use the button above or Alt+M to switch between edit and preview modes
+
+Start building your knowledge graph!
+`
+            });
+            
+            const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+            await docManager.openOrReveal('start.md', factory);
+          } catch (createError) {
+            console.error('Failed to create start.md:', createError);
+          }
+        }
+      }
+    });
+
+    // Add commands to palette
     if (palette) {
       palette.addItem({
-        command: COMMAND_TOGGLE_PREVIEW,
+        command: COMMAND_TOGGLE_MODE,
+        category: 'PKM'
+      });
+      palette.addItem({
+        command: COMMAND_OPEN_START,
         category: 'PKM'
       });
     }
 
-    // Add keyboard shortcut
+    // Add keyboard shortcut for mode toggle
     app.commands.addKeyBinding({
-      command: COMMAND_TOGGLE_PREVIEW,
-      keys: ['Shift Cmd T'],
-      selector: '.jp-FileEditor'
+      command: COMMAND_TOGGLE_MODE,
+      keys: ['Alt M'],
+      selector: 'body'
     });
 
-    // Helper function to open markdown preview
-    const openMarkdownPreview = async (path: string) => {
-      // Try different command variations
-      const commands = [
-        'markdownviewer:open',
-        'docmanager:open',
-        'filebrowser:open-preview'
-      ];
-      
-      for (const command of commands) {
-        if (app.commands.hasCommand(command)) {
-          try {
-            if (command === 'docmanager:open') {
-              // For docmanager:open, we need to specify factory
-              await app.commands.execute(command, {
-                path: path,
-                factory: 'Markdown Preview',
-                options: {
-                  mode: 'split-right'
-                }
-              });
-              return;
-            } else {
-              await app.commands.execute(command, {
-                path: path,
-                options: {
-                  mode: 'split-right'
-                }
-              });
-              return;
-            }
-          } catch (error) {
-            console.warn(`Failed with command ${command}:`, error);
-          }
-        }
+    // Create a single global toggle widget
+    let globalToggleWidget: Widget | null = null;
+    
+    const showToggleWidget = () => {
+      if (!globalToggleWidget) {
+        globalToggleWidget = createModeToggleWidget();
+        document.body.appendChild(globalToggleWidget.node);
+        console.log('Created global toggle widget');
       }
-      
-      // If no commands work, try direct approach
-      console.log('Trying direct markdown preview creation...');
-      if (docManager) {
-        try {
-          await docManager.open(path, 'Markdown Preview', {}, { mode: 'split-right' });
-        } catch (error: unknown) {
-          console.error('Direct preview creation failed:', error);
-        }
+      globalToggleWidget.node.style.display = 'block';
+    };
+    
+    const hideToggleWidget = () => {
+      if (globalToggleWidget) {
+        globalToggleWidget.node.style.display = 'none';
       }
     };
 
-    // Auto-open preview when opening .md files
-    editorTracker.widgetAdded.connect((sender, widget) => {
-      const path = widget.context.path;
+    // Show/hide toggle widget based on current file
+    const updateToggleVisibility = () => {
+      const currentEditorWidget = editorTracker.currentWidget;
+      const currentViewerWidget = markdownTracker.currentWidget;
       
-      if (path.endsWith('.md')) {
-        // Default to showing preview unless explicitly toggled off
-        if (previewStates.get(path) !== false) {
-          // Wait for the widget to be ready and properly attached
-          widget.context.ready.then(() => {
-            // Ensure widget is attached to DOM before opening preview
-            if (!widget.isAttached) {
-              widget.disposed.connect(() => {
-                console.log('Widget was disposed before attachment');
-              });
-              // Wait for attachment
-              const checkAttachment = setInterval(() => {
-                if (widget.isAttached && !widget.isDisposed) {
-                  clearInterval(checkAttachment);
-                  // Additional delay to ensure everything is loaded
-                  setTimeout(() => {
-                    openMarkdownPreview(path);
-                  }, 500);
-                } else if (widget.isDisposed) {
-                  clearInterval(checkAttachment);
-                }
-              }, 50);
-            } else {
-              // Widget already attached
-              setTimeout(() => {
-                openMarkdownPreview(path);
-              }, 300);
-            }
-          });
-        }
+      // Show if we have a markdown file open (either editor or viewer)
+      const hasMarkdownFile = (currentEditorWidget && currentEditorWidget.context.path.endsWith('.md')) ||
+                             (currentViewerWidget && currentViewerWidget.context.path.endsWith('.md'));
+      
+      if (hasMarkdownFile) {
+        showToggleWidget();
+      } else {
+        hideToggleWidget();
       }
-    });
+    };
 
-    // Clean up preview state when file is closed
-    editorTracker.currentChanged.connect((sender, widget) => {
-      if (!widget) {
-        return;
-      }
-      // Check if any tracked widgets have been disposed
-      for (const [path] of previewStates) {
-        let hasWidget = false;
-        editorTracker.forEach(w => {
-          if (w.context.path === path) {
-            hasWidget = true;
-          }
-        });
-        if (!hasWidget) {
-          previewStates.delete(path);
-        }
-      }
-    });
+    // Track current widget changes
+    editorTracker.currentChanged.connect(updateToggleVisibility);
+    markdownTracker.currentChanged.connect(updateToggleVisibility);
     
-    // Alternative: monitor widget disposal
-    editorTracker.widgetAdded.connect((sender, widget) => {
-      widget.disposed.connect(() => {
-        const path = widget.context.path;
-        previewStates.delete(path);
-      });
-    });
+    // Track when widgets are added/removed
+    editorTracker.widgetAdded.connect(updateToggleVisibility);
+    markdownTracker.widgetAdded.connect(updateToggleVisibility);
+
+    // Auto-open start.md on startup (with delay to ensure UI is ready)
+    setTimeout(() => {
+      app.commands.execute(COMMAND_OPEN_START);
+    }, 1000);
   }
 };

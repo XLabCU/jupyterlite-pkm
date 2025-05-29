@@ -86,6 +86,7 @@ function createWelcomeContent(): Widget {
       <li><code>[[note|display text]]</code> - Link with custom display text</li>
       <li>Ctrl/Cmd + Click to follow links</li>
       <li>Auto-completion for existing notes</li>
+      <li>You can wikilink your markdown notes to your python .ipynb files.</li>
     </ul>
     
     <h4 style="margin-top: 15px; margin-bottom: 5px;">📊 Notebook Embedding</h4>
