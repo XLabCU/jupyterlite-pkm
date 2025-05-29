@@ -8,92 +8,79 @@ Follow these steps to include the PKM extension in your JupyterLite build.
 - Node.js 16+
 - JupyterLite installed (`pip install jupyterlite-core`)
 
-## Step 1: Build the Extension
+## Quick Installation (Recommended)
 
-First, ensure the extension is built:
+The simplest way to install the extension:
 
 ```bash
-cd jupyterlite-pkm
+# Clone the repository
+git clone https://github.com/your-repo/jupyterlite-pkm-extension
+cd jupyterlite-pkm-extension
+
+# Install the extension (automatically builds and installs)
+pip install -e .
+```
+
+That's it! The extension will be automatically available in your JupyterLite environment.
+
+## Manual Installation (Alternative)
+
+If you prefer step-by-step control:
+
+### Step 1: Build the Extension
+
+```bash
+cd jupyterlite-pkm-extension
 
 # Install JavaScript dependencies
 npm install
-# or
-jlpm install
 
 # Build the extension
 npm run build
 ```
 
-## Step 2: Install the Extension Package
-
-Install the extension as a Python package:
+### Step 2: Install the Extension Package
 
 ```bash
-# From the jupyterlite-pkm-extension directory
+# Install as Python package
 pip install -e .
 
 # Verify installation
-jupyter labextension list
-# Should show: @jupyterlite/pkm-extension
+pip list | grep jupyterlite-pkm
+# Should show: jupyterlite-pkm
 ```
 
-## Step 3: Create JupyterLite Configuration
+## Using the Extension
 
-Create a `jupyter-lite.json` file in your JupyterLite project directory:
+Once installed, the extension is automatically available in any JupyterLite environment. No additional configuration required!
 
-```json
-{
-  "jupyter-lite-schema-version": 0,
-  "jupyter-config-data": {
-    "disabledExtensions": [],
-    "federated_extensions": [
-      {
-        "extension": "./extensions",
-        "load": true,
-        "name": "@jupyterlite/pkm-extension"
-      }
-    ]
-  }
-}
-```
+### Testing the Installation
 
-## Step 4: Copy Extension to JupyterLite
+1. **Create a markdown file**: In JupyterLite, create a new `.md` file
+2. **Test wikilinks**: Type `[[test-note]]` and see it become a clickable link
+3. **Test shortcuts**: 
+   - `Alt+M` - Toggle edit/preview mode
+   - `Alt+B` - Open backlinks panel
+   - `Alt+F` - Open search panel
 
-Copy the built extension to your JupyterLite project:
+## Building a JupyterLite Site with the Extension
+
+If you're creating a custom JupyterLite site:
 
 ```bash
-# Create extensions directory in your JupyterLite project
-mkdir -p my-jupyterlite-site/extensions/jupyterlite-pkm-extension
-
-# Copy the built extension files
-cp -r jupyterlite-pkm-extension/jupyterlite_pkm_extension/labextension/* \
-  my-jupyterlite-site/extensions/jupyterlite-pkm-extension/
-```
-
-## Step 5: Build JupyterLite Site
-
-Build your JupyterLite site with the extension:
-
-```bash
+# Create your JupyterLite site directory
+mkdir my-jupyterlite-site
 cd my-jupyterlite-site
 
-# Build the JupyterLite site
+# Create content directory and add markdown files
+mkdir content
+echo "# Welcome\n\nThis is a [[test-note]] example." > content/index.md
+
+# Build the site (extension will be included automatically)
 jupyter lite build --contents content
 
-# The extension will be automatically included
-```
-
-## Step 6: Serve and Test
-
-Serve your JupyterLite site locally to test:
-
-```bash
-# Serve the built site
+# Serve locally
 jupyter lite serve
-
-# Or use Python's built-in server
-cd _output
-python -m http.server 8000
 ```
 
 Open http://localhost:8000 in your browser.
@@ -120,14 +107,25 @@ jupyter lite build --contents content --requirements requirements.txt
 ```
 
 
-## Verifying Installation
+## Features Available After Installation
 
-Once JupyterLite is running:
+Once installed, you'll have access to:
 
-1. Create a new `.md` file - preview should open automatically
-2. Type `[[Test Note]]` - it should appear as a styled link
-3. Press `Cmd+Shift+F` - search panel should open
-4. Click a broken wikilink - prompt to create note should appear
+### ✅ Wikilinks
+- `[[note-name]]` - Link to other files
+- `[[note-name|Display Text]]` - Custom display text
+- Works with `.md`, `.ipynb`, `.csv`, `.json`, `.geojson` files
+- Click broken links to create new files
+
+### ✅ Keyboard Shortcuts
+- `Alt+M` - Toggle markdown edit/preview mode
+- `Alt+B` - Open/close backlinks panel
+- `Alt+F` - Open search across all files
+
+### ✅ Automatic Features
+- Persistent mode switching (remembers edit vs preview per file)
+- Cross-file search with context
+- Backlinks tracking and navigation
 
 ## Troubleshooting
 
