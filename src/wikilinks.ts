@@ -162,7 +162,14 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
               const escapedDisplay = displayText.replace(/"/g, '&quot;');
               
               let replacement: string;
-              if (linkPath) {
+              
+              // Check if this is an external link (starts with http:// or https://)
+              const isExternalLink = link.target.startsWith('http://') || link.target.startsWith('https://');
+              
+              if (isExternalLink) {
+                // External link - create a regular link with external icon
+                replacement = `<a href="${link.target}" class="pkm-external-link" target="_blank" rel="noopener noreferrer">${escapedDisplay}</a>`;
+              } else if (linkPath) {
                 // File exists - create a clickable link
                 // Use a format that JupyterLab's commandlinker won't interfere with
                 // We'll encode our data in the href as a special protocol
