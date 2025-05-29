@@ -102,5 +102,8 @@ Thumbs.db
 *.map
 build_log.json
 
+# JupyterLite build cache
+.jupyterlite.doit.db
+
 # Lock files (keep package-lock.json but ignore yarn.lock if using npm)
 # yarn.lock  # Uncomment if using npm instead of yarn
