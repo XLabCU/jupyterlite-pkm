@@ -146,24 +146,15 @@ export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
         }
         
         if (currentWidget && currentPath) {
+          // Instead of closing the widget, just open in the new mode
+          // JupyterLab will handle switching between views
           try {
-            // Close the current widget
-            currentWidget.close();
+            const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+            await docManager.openOrReveal(currentPath, factory);
             
-            // Small delay to ensure cleanup
-            setTimeout(async () => {
-              try {
-                // Open in the new mode
-                const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
-                await docManager.openOrReveal(currentPath, factory);
-                
-                console.log(`Switched ${currentPath} from ${oldMode} to ${pkmState.markdownMode} mode`);
-              } catch (error) {
-                console.error('Failed to reopen file:', error);
-              }
-            }, 100);
+            console.log(`Switched ${currentPath} from ${oldMode} to ${pkmState.markdownMode} mode`);
           } catch (error) {
-            console.error('Failed to close current widget:', error);
+            console.error('Failed to switch file mode:', error);
           }
         }
       });
@@ -204,24 +195,15 @@ export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
         }
         
         if (currentWidget && currentPath) {
+          // Instead of closing the widget, just open in the new mode
+          // JupyterLab will handle switching between views
           try {
-            // Close the current widget
-            currentWidget.close();
+            const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+            await docManager.openOrReveal(currentPath, factory);
             
-            // Small delay to ensure cleanup
-            setTimeout(async () => {
-              try {
-                // Open in the new mode
-                const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
-                await docManager.openOrReveal(currentPath, factory);
-                
-                console.log(`Switched ${currentPath} from ${oldMode} to ${pkmState.markdownMode} mode via keyboard`);
-              } catch (error) {
-                console.error('Failed to reopen file:', error);
-              }
-            }, 100);
+            console.log(`Switched ${currentPath} from ${oldMode} to ${pkmState.markdownMode} mode via keyboard`);
           } catch (error) {
-            console.error('Failed to close current widget:', error);
+            console.error('Failed to switch file mode:', error);
           }
         }
         
