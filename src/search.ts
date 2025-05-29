@@ -337,7 +337,7 @@ export const searchPlugin: JupyterFrontEndPlugin<void> = {
     // Add keyboard shortcut
     app.commands.addKeyBinding({
       command: COMMAND_SEARCH,
-      keys: ['Cmd Shift F'],
+      keys: ['Alt F'],
       selector: 'body'
     });
 

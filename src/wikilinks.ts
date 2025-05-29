@@ -30,6 +30,12 @@ interface WikiLink {
 }
 
 /**
+ * Global mapping from display text to target for wikilinks
+ * This survives HTML sanitization since it's stored in JavaScript, not DOM
+ */
+const wikilinkDisplayToTarget = new Map<string, string>();
+
+/**
  * Find all code spans in the text (inline code with backticks)
  */
 function findCodeSpans(text: string): Array<{start: number, end: number}> {
@@ -60,6 +66,7 @@ function isInsideCodeSpan(position: number, codeSpans: Array<{start: number, end
  * Parse wikilinks from text, excluding those inside code spans
  */
 function parseWikilinks(text: string): WikiLink[] {
+  console.log('parseWikilinks called with text containing:', text.includes('[[project-ideas|My Project Ideas]]') ? 'target wikilink' : 'other content');
   const links: WikiLink[] = [];
   const codeSpans = findCodeSpans(text);
   let match;
@@ -68,6 +75,13 @@ function parseWikilinks(text: string): WikiLink[] {
   while ((match = WIKILINK_REGEX.exec(text)) !== null) {
     // Skip wikilinks that are inside code spans
     if (!isInsideCodeSpan(match.index, codeSpans)) {
+      console.log('Wikilink parsing:', {
+        fullMatch: match[0],
+        group1: match[1],
+        group2: match[2],
+        target: match[1].trim(),
+        display: match[2]?.trim()
+      });
       links.push({
         fullMatch: match[0],
         target: match[1].trim(),
@@ -227,10 +241,18 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
               console.log('Found path for', link.target, ':', linkPath);
               const displayText = link.display || link.target;
               
-              // Escape any quotes in the attributes to prevent HTML injection
-              const escapedPath = linkPath ? linkPath.replace(/"/g, '&quot;') : '';
-              const escapedTarget = link.target.replace(/"/g, '&quot;');
-              const escapedDisplay = displayText.replace(/"/g, '&quot;');
+              // Store the mapping from display text to target (survives HTML sanitization)
+              wikilinkDisplayToTarget.set(displayText, link.target);
+              if (linkPath) {
+                wikilinkDisplayToTarget.set(displayText + '_PATH', linkPath);
+              }
+              
+              console.log('Creating wikilink HTML:', {
+                originalTarget: link.target,
+                displayText: displayText,
+                linkPath: linkPath,
+                'stored in map': wikilinkDisplayToTarget.get(displayText)
+              });
               
               let replacement: string;
               
@@ -239,17 +261,15 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
               
               if (isExternalLink) {
                 // External link - create a regular link with external icon
-                replacement = `<a href="${link.target}" class="pkm-external-link" target="_blank" rel="noopener noreferrer">${escapedDisplay}</a>`;
+                replacement = `<a href="${link.target}" class="pkm-external-link" target="_blank" rel="noopener noreferrer">${displayText}</a>`;
               } else if (linkPath) {
-                // File exists - create a clickable link
-                // Use a format that JupyterLab's commandlinker won't interfere with
-                // We'll encode our data in the href as a special protocol
-                const encodedData = encodeURIComponent(JSON.stringify({ path: linkPath, target: link.target }));
-                replacement = `<a href="pkm-wikilink:${encodedData}" class="pkm-wikilink" data-path="${escapedPath}" data-target="${escapedTarget}" data-wikilink="true">${escapedDisplay}</a>`;
+                // File exists - create a simple clickable link (HTML sanitization will remove all custom attributes)
+                replacement = `<a class="pkm-wikilink">${displayText}</a>`;
+                console.log('Generated HTML for existing file:', replacement);
               } else {
                 // File doesn't exist - create a broken link
-                const encodedData = encodeURIComponent(JSON.stringify({ path: '', target: link.target }));
-                replacement = `<a href="pkm-wikilink:${encodedData}" class="pkm-wikilink pkm-wikilink-broken" data-target="${escapedTarget}" data-path="" data-wikilink="true">${escapedDisplay}</a>`;
+                replacement = `<a class="pkm-wikilink pkm-wikilink-broken">${displayText}</a>`;
+                console.log('Generated HTML for non-existing file:', replacement);
               }
               
               const adjustedStart = link.startIndex + offset;
@@ -309,6 +329,12 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
               console.log(`Found ${wikilinks.length} wikilinks in rendered content`);
               
               wikilinks.forEach((link: Element) => {
+                console.log('Setting up click handler for link:', {
+                  outerHTML: link.outerHTML,
+                  attributes: Array.from(link.attributes).map(attr => `${attr.name}="${attr.value}"`),
+                  textContent: link.textContent
+                });
+                
                 // Remove any existing click handlers to prevent duplicates
                 const newLink = link.cloneNode(true) as HTMLAnchorElement;
                 link.parentNode?.replaceChild(newLink, link);
@@ -318,55 +344,32 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                   event.stopPropagation();
                   
                   try {
-                    // First try to get data from our custom attributes
-                    let path = newLink.dataset?.path || newLink.getAttribute('data-path');
-                    let targetName = newLink.dataset?.target || newLink.getAttribute('data-target');
-                    const isBrokenClass = newLink.classList.contains('pkm-wikilink-broken');
+                    // Get the display text (only thing that survives HTML sanitization)
+                    const displayText = newLink.textContent?.trim() || '';
+                    console.log('Click handler - displayText:', displayText);
                     
-                    // Try to extract from our custom protocol in href
-                    const href = newLink.getAttribute('href');
-                    if (href && href.startsWith('pkm-wikilink:')) {
-                      try {
-                        const encodedData = href.substring('pkm-wikilink:'.length);
-                        const data = JSON.parse(decodeURIComponent(encodedData));
-                        path = data.path || path;
-                        targetName = data.target || targetName;
-                      } catch (e) {
-                        console.error('Failed to parse pkm-wikilink data:', e);
-                      }
-                    }
+                    // Look up the original target from our mapping
+                    const targetName = wikilinkDisplayToTarget.get(displayText) || '';
+                    const path = wikilinkDisplayToTarget.get(displayText + '_PATH') || '';
                     
-                    // If still no targetName, try to extract from link text as fallback
-                    if (!targetName) {
-                      targetName = newLink.textContent?.trim() || '';
-                    }
-                    
-                    // If JupyterLab has transformed our link, try extracting from commandlinker-args
-                    const commandlinkerArgs = newLink.getAttribute('commandlinker-args');
-                    if (commandlinkerArgs) {
-                      try {
-                        const args = JSON.parse(commandlinkerArgs);
-                        // Only update path if we don't have it yet
-                        if (!path && args.path !== undefined) {
-                          path = args.path;
-                        }
-                      } catch (e) {
-                        console.error('Failed to parse commandlinker-args:', e);
-                      }
-                    }
+                    console.log('Click handler - lookup results:', {
+                      displayText,
+                      targetName,
+                      path,
+                      'map size': wikilinkDisplayToTarget.size
+                    });
                     
                     // Log for debugging
                     console.log('Wikilink clicked:', {
                       path,
                       targetName,
-                      classList: newLink.classList.toString(),
-                      commandlinkerArgs,
-                      href: newLink.getAttribute('href'),
-                      text: newLink.textContent
+                      displayText,
+                      classList: newLink.classList.toString()
                     });
                     
                     // A link is broken ONLY if it explicitly has the broken class
                     // Don't assume it's broken just because we can't extract the path from transformed HTML
+                    const isBrokenClass = newLink.classList.contains('pkm-wikilink-broken');
                     const isBroken = isBrokenClass;
                     
                     if (isBroken) {

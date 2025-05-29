@@ -98,9 +98,8 @@ function createWelcomeContent(): Widget {
     
     <h4 style="margin-top: 15px; margin-bottom: 5px;">⌨️ Keyboard Shortcuts</h4>
     <ul style="margin-left: 20px; margin-bottom: 10px;">
-      <li><kbd>Shift</kbd> + <kbd>Cmd/Ctrl</kbd> + <kbd>T</kbd> - Toggle markdown preview</li>
-      <li><kbd>Cmd/Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> - Global search</li>
-      <li><kbd>Cmd/Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> - Show backlinks</li>
+      <li><kbd>Alt</kbd> + <kbd>M</kbd> - Toggle markdown preview</li>
+      <li><kbd>Alt</kbd> + <kbd>F</kbd> - Global search</li>
     </ul>
     
     <h4 style="margin-top: 15px; margin-bottom: 5px;">💾 Auto-Save</h4>
@@ -118,6 +117,7 @@ function createWelcomeContent(): Widget {
     <p style="margin-top: 20px; font-style: italic; color: #666;">
       💡 Tip: You can access this welcome message anytime from the Command Palette 
       (search for "Show PKM Welcome").
+      💡 Tip: The plugin looks for <pre>start.md</pre> to open at startup. 
     </p>
   `;
   

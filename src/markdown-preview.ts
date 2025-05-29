@@ -239,7 +239,7 @@ This is your starting note. Try creating wikilinks:
 
 ## Features:
 - **Wikilinks**: Use [[Note Name]] syntax
-- **Search**: Cmd+Shift+F to search all notes  
+- **Search**: Alt+F to search all notes  
 - **Auto-save**: Your changes are saved automatically
 - **Mode Toggle**: Use the button above or Alt+M to switch between edit and preview modes
 
