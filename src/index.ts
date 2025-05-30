@@ -12,6 +12,7 @@ import { wikilinkPlugin } from './wikilinks';
 import { searchPlugin } from './search';
 import { backlinksPlugin } from './backlinks';
 import { notebookEmbedPlugin } from './notebook-embed';
+import { blockEmbeddingPlugin } from './block-embedding';
 import { welcomePlugin } from './welcome';
 
 /**
@@ -40,6 +41,7 @@ export default [
   welcomePlugin,
   markdownPreviewPlugin,
   wikilinkPlugin,
+  blockEmbeddingPlugin,
   searchPlugin,
   backlinksPlugin,
   notebookEmbedPlugin

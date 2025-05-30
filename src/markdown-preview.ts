@@ -91,17 +91,40 @@ export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
       const button = widget.node.querySelector('#pkm-mode-btn') as HTMLButtonElement;
       const statusSpan = widget.node.querySelector('span') as HTMLSpanElement;
       
+      const getCurrentFileMode = (): 'edit' | 'preview' | 'none' => {
+        // Check if current focused widget is a markdown file
+        const editorWidget = editorTracker.currentWidget;
+        const previewWidget = markdownTracker.currentWidget;
+        
+        if (editorWidget && editorWidget.context.path.endsWith('.md')) {
+          return 'edit';
+        } else if (previewWidget && previewWidget.context.path.endsWith('.md')) {
+          return 'preview';
+        }
+        return 'none';
+      };
+
       const updateButton = () => {
-        if (pkmState.markdownMode === 'edit') {
-          button.innerHTML = '📝 Edit Mode';
+        const currentMode = getCurrentFileMode();
+        
+        if (currentMode === 'edit') {
+          button.innerHTML = '👁 Switch to Preview';
           button.style.background = 'var(--jp-brand-color1, #1976d2)';
           button.style.borderColor = 'var(--jp-brand-color1, #1976d2)';
-          statusSpan.textContent = 'Markdown files will open in edit mode';
-        } else {
-          button.innerHTML = '👁 Preview Mode';
+          statusSpan.textContent = 'Currently viewing in edit mode';
+          button.disabled = false;
+        } else if (currentMode === 'preview') {
+          button.innerHTML = '📝 Switch to Edit';
           button.style.background = 'var(--jp-warn-color1, #ff9800)';
           button.style.borderColor = 'var(--jp-warn-color1, #ff9800)';
-          statusSpan.textContent = 'Markdown files will open in preview mode';
+          statusSpan.textContent = 'Currently viewing in preview mode';
+          button.disabled = false;
+        } else {
+          button.innerHTML = '📄 No Markdown File';
+          button.style.background = 'var(--jp-layout-color3, #ccc)';
+          button.style.borderColor = 'var(--jp-layout-color3, #ccc)';
+          statusSpan.textContent = 'Focus a markdown file to toggle view';
+          button.disabled = true;
         }
       };
       
@@ -115,108 +138,166 @@ export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
       });
       
       button.addEventListener('click', async () => {
-        const oldMode = pkmState.markdownMode;
-        const newMode = pkmState.markdownMode === 'edit' ? 'preview' : 'edit';
-        pkmState.setMarkdownMode(newMode);
-        stateDB.save(STATE_KEY, newMode);
-        updateButton();
+        const currentMode = getCurrentFileMode();
         
-        // Show brief confirmation
-        const originalText = statusSpan.textContent;
-        statusSpan.textContent = 'Mode changed!';
-        statusSpan.style.color = 'var(--jp-success-color1, #4caf50)';
-        setTimeout(() => {
-          statusSpan.textContent = originalText;
-          statusSpan.style.color = 'var(--jp-ui-font-color1)';
-        }, 1000);
-
-        // Switch the current file to the new mode if it's a markdown file
-        // Find the currently active markdown file
+        if (currentMode === 'none') {
+          // No markdown file is focused, do nothing
+          return;
+        }
+        
+        // Determine which widget and path to work with
         let currentWidget = null;
         let currentPath = '';
         
-        if (oldMode === 'edit') {
-          // We were in edit mode, check editor tracker
+        if (currentMode === 'edit') {
           currentWidget = editorTracker.currentWidget;
           if (currentWidget && currentWidget.context.path.endsWith('.md')) {
             currentPath = currentWidget.context.path;
           }
-        } else {
-          // We were in preview mode, check viewer tracker
+        } else if (currentMode === 'preview') {
           currentWidget = markdownTracker.currentWidget;
           if (currentWidget && currentWidget.context.path.endsWith('.md')) {
             currentPath = currentWidget.context.path;
           }
         }
         
-        if (currentWidget && currentPath) {
-          // Instead of closing the widget, just open in the new mode
-          // JupyterLab will handle switching between views
-          try {
-            const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
-            await docManager.openOrReveal(currentPath, factory);
-            
-            console.log(`Switched ${currentPath} from ${oldMode} to ${pkmState.markdownMode} mode`);
-          } catch (error) {
-            console.error('Failed to switch file mode:', error);
+        if (!currentWidget || !currentPath) {
+          console.warn('No valid markdown file found to toggle');
+          return;
+        }
+        
+        // Determine target mode
+        const targetMode = currentMode === 'edit' ? 'preview' : 'edit';
+        const targetFactory = targetMode === 'edit' ? 'Editor' : 'Markdown Preview';
+        
+        try {
+          // Show loading state
+          statusSpan.textContent = `Switching to ${targetMode}...`;
+          statusSpan.style.color = 'var(--jp-brand-color1, #1976d2)';
+          
+          // Close the current widget first
+          if (currentWidget && !currentWidget.isDisposed) {
+            currentWidget.close();
           }
+          
+          // Small delay to ensure cleanup
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Open the file in the new mode
+          await docManager.openOrReveal(currentPath, targetFactory);
+          
+          // Show success confirmation
+          statusSpan.textContent = `Switched to ${targetMode} mode!`;
+          statusSpan.style.color = 'var(--jp-success-color1, #4caf50)';
+          
+          setTimeout(() => {
+            updateButton(); // This will reset the text and color
+          }, 1500);
+          
+          console.log(`Toggled ${currentPath} from ${currentMode} to ${targetMode} mode`);
+          
+        } catch (error) {
+          console.error('Failed to toggle file mode:', error);
+          statusSpan.textContent = 'Failed to switch mode';
+          statusSpan.style.color = 'var(--jp-error-color1, #f44336)';
+          
+          setTimeout(() => {
+            updateButton();
+          }, 2000);
         }
       });
       
-      // Listen for mode changes from other sources
-      pkmState.markdownModeChanged.connect(updateButton);
+      // Listen for focus changes to update button state
+      editorTracker.currentChanged.connect(updateButton);
+      markdownTracker.currentChanged.connect(updateButton);
       
+      // Initial button update
       updateButton();
       return widget;
     };
 
     // Add toggle command
     app.commands.addCommand(COMMAND_TOGGLE_MODE, {
-      label: 'Toggle Markdown Mode (Edit/Preview)',
+      label: 'Toggle Current Markdown File View',
       execute: async () => {
-        const oldMode = pkmState.markdownMode;
-        const newMode = pkmState.markdownMode === 'edit' ? 'preview' : 'edit';
-        pkmState.setMarkdownMode(newMode);
-        stateDB.save(STATE_KEY, newMode);
+        // Use the same logic as the button click
+        const getCurrentFileMode = (): 'edit' | 'preview' | 'none' => {
+          const editorWidget = editorTracker.currentWidget;
+          const previewWidget = markdownTracker.currentWidget;
+          
+          if (editorWidget && editorWidget.context.path.endsWith('.md')) {
+            return 'edit';
+          } else if (previewWidget && previewWidget.context.path.endsWith('.md')) {
+            return 'preview';
+          }
+          return 'none';
+        };
         
-        // Switch the current file to the new mode if it's a markdown file
-        // Find the currently active markdown file
+        const currentMode = getCurrentFileMode();
+        
+        if (currentMode === 'none') {
+          showDialog({
+            title: 'No Markdown File',
+            body: 'Please focus a markdown file to toggle its view mode.',
+            buttons: [Dialog.okButton()]
+          });
+          return;
+        }
+        
+        // Determine which widget and path to work with
         let currentWidget = null;
         let currentPath = '';
         
-        if (oldMode === 'edit') {
-          // We were in edit mode, check editor tracker
+        if (currentMode === 'edit') {
           currentWidget = editorTracker.currentWidget;
           if (currentWidget && currentWidget.context.path.endsWith('.md')) {
             currentPath = currentWidget.context.path;
           }
-        } else {
-          // We were in preview mode, check viewer tracker
+        } else if (currentMode === 'preview') {
           currentWidget = markdownTracker.currentWidget;
           if (currentWidget && currentWidget.context.path.endsWith('.md')) {
             currentPath = currentWidget.context.path;
           }
         }
         
-        if (currentWidget && currentPath) {
-          // Instead of closing the widget, just open in the new mode
-          // JupyterLab will handle switching between views
-          try {
-            const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
-            await docManager.openOrReveal(currentPath, factory);
-            
-            console.log(`Switched ${currentPath} from ${oldMode} to ${pkmState.markdownMode} mode via keyboard`);
-          } catch (error) {
-            console.error('Failed to switch file mode:', error);
-          }
+        if (!currentWidget || !currentPath) {
+          console.warn('No valid markdown file found to toggle');
+          return;
         }
         
-        // Show current mode
-        showDialog({
-          title: 'Markdown Mode Changed',
-          body: `Markdown files will now open in ${pkmState.markdownMode} mode`,
-          buttons: [Dialog.okButton()]
-        });
+        // Determine target mode
+        const targetMode = currentMode === 'edit' ? 'preview' : 'edit';
+        const targetFactory = targetMode === 'edit' ? 'Editor' : 'Markdown Preview';
+        
+        try {
+          // Close the current widget first
+          if (currentWidget && !currentWidget.isDisposed) {
+            currentWidget.close();
+          }
+          
+          // Small delay to ensure cleanup
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Open the file in the new mode
+          await docManager.openOrReveal(currentPath, targetFactory);
+          
+          console.log(`Toggled ${currentPath} from ${currentMode} to ${targetMode} mode via keyboard`);
+          
+          // Show brief confirmation
+          showDialog({
+            title: 'View Mode Changed',
+            body: `Switched to ${targetMode} mode for ${currentPath.split('/').pop()}`,
+            buttons: [Dialog.okButton()]
+          });
+          
+        } catch (error) {
+          console.error('Failed to toggle file mode:', error);
+          showDialog({
+            title: 'Error',
+            body: 'Failed to switch view mode. Please try again.',
+            buttons: [Dialog.okButton()]
+          });
+        }
       }
     });
 
