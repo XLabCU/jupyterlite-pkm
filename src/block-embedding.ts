@@ -308,7 +308,7 @@ function parseBlockEmbeds(text: string): BlockEmbed[] {
 }
 
 /**
- * Render an embedded block as HTML
+ * Render an embedded block as markdown with a visual container
  */
 function renderEmbedBlock(extractedBlock: ExtractedBlock, displayTitle?: string): string {
   const timestamp = extractedBlock.extractedAt.toLocaleString();
@@ -317,30 +317,25 @@ function renderEmbedBlock(extractedBlock: ExtractedBlock, displayTitle?: string)
   
   if (!extractedBlock.found) {
     return `
-      <div class="pkm-embed-block pkm-embed-not-found">
-        <div class="pkm-embed-header">
-          <span class="pkm-embed-icon">${statusIcon}</span>
-          <span class="pkm-embed-title">${extractedBlock.sourceFile}#${extractedBlock.blockRef}</span>
-        </div>
-        <div class="pkm-embed-content">
-          <em>Block not found</em>
-        </div>
-      </div>
-    `;
+> **${statusIcon} ${extractedBlock.sourceFile}#${extractedBlock.blockRef}**
+> 
+> *Block not found*
+`;
   }
   
+  // Format the embedded content with clear visual boundaries
+  const headerLine = `**${statusIcon} ${extractedBlock.sourceFile}#${title}** *(🕒 ${timestamp})*`;
+  const contentLines = extractedBlock.content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
   return `
-    <div class="pkm-embed-block">
-      <div class="pkm-embed-header">
-        <span class="pkm-embed-icon">${statusIcon}</span>
-        <span class="pkm-embed-title">${extractedBlock.sourceFile}#${title}</span>
-        <span class="pkm-embed-timestamp">🕒 ${timestamp}</span>
-      </div>
-      <div class="pkm-embed-content">
-        ${extractedBlock.content.split('\n').map(line => `<p>${line}</p>`).join('')}
-      </div>
-    </div>
-  `;
+---
+
+${headerLine}
+
+${contentLines.join('\n\n')}
+
+---
+`;
 }
 
 /**
@@ -443,62 +438,6 @@ export const blockEmbeddingPlugin: JupyterFrontEndPlugin<void> = {
       }, 0);
     }
 
-    // Add CSS for embedded blocks
-    const style = document.createElement('style');
-    style.textContent = `
-      .pkm-embed-block {
-        border: 2px solid var(--jp-border-color1);
-        border-radius: 8px;
-        margin: 16px 0;
-        background: var(--jp-layout-color0);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
-      
-      .pkm-embed-not-found {
-        border-color: var(--jp-error-color1);
-        background: var(--jp-error-color3);
-      }
-      
-      .pkm-embed-header {
-        padding: 8px 12px;
-        background: var(--jp-layout-color1);
-        border-bottom: 1px solid var(--jp-border-color1);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 13px;
-        font-weight: 500;
-      }
-      
-      .pkm-embed-icon {
-        font-size: 14px;
-      }
-      
-      .pkm-embed-title {
-        color: var(--jp-ui-font-color1);
-        flex: 1;
-        font-family: var(--jp-code-font-family);
-      }
-      
-      .pkm-embed-timestamp {
-        color: var(--jp-ui-font-color2);
-        font-size: 11px;
-        margin-left: auto;
-      }
-      
-      .pkm-embed-content {
-        padding: 12px;
-        line-height: 1.6;
-      }
-      
-      .pkm-embed-content p {
-        margin: 0 0 8px 0;
-      }
-      
-      .pkm-embed-content p:last-child {
-        margin-bottom: 0;
-      }
-    `;
-    document.head.appendChild(style);
+    // No custom CSS needed - using markdown formatting instead
   }
 };
