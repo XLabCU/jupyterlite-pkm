@@ -11,7 +11,6 @@ A JupyterLite extension that enhances markdown editing with personal knowledge m
 
 ### 📝 Markdown Mode Switching ✅
 - **Toggle preview**: Press `Alt+M` to switch between edit and preview modes
-- **Persistent state**: Mode choice remembered when switching between files
 - **Floating toggle button**: Visual indicator and easy access
 
 ### 🔍 Search ✅  
@@ -25,13 +24,19 @@ A JupyterLite extension that enhances markdown editing with personal knowledge m
 - **Click navigation**: Click any backlink to open the source file
 - **Context display**: Shows surrounding text for each backlink
 
-## 🚧 Planned Features
+## 🚧 Next Phase Features
 
-### 📊 Notebook Embedding (Next)
-- Embed notebook cells in markdown: `![[notebook.ipynb#cell-N]]`
-- Support for code cells, outputs, and ranges
+### 📊 Notebook Cell Embedding (Phase 2)
+- Embed notebook cells: `![[notebook.ipynb#cell-1]]`
+- Code and output separation: `![[notebook.ipynb#cell-1-code]]`, `![[notebook.ipynb#cell-1-output]]`
+- Cell ranges: `![[notebook.ipynb#cell-range-1-3]]`
 - Live references to computational work
-- See `NOTEBOOK-EMBEDDING-SPEC.md` for detailed specification
+
+### 🔄 Enhanced Block Features (Phase 3)
+- Refresh embedded content functionality
+- Block transclusion editing
+- Nested embedding support
+- Performance optimizations for large collections
 
 ## Installation
 
@@ -98,28 +103,235 @@ npm run build:prod
 python -m build
 ```
 
-## Usage
+## How to Use This Extension for Personal Knowledge Management
 
-Once installed, the extension automatically enhances your JupyterLite markdown editing experience:
+This extension transforms JupyterLite into a powerful PKM system. Here's your complete guide:
 
-### Basic Workflow
-1. **Create notes**: Create new `.md` files in JupyterLite
-2. **Link notes**: Use `[[Note Name]]` to create links between notes  
-3. **Navigate**: Click wikilinks to jump between notes
-4. **Switch modes**: Press `Alt+M` to toggle between edit and preview
-5. **View backlinks**: Press `Alt+B` to see which notes link to the current file
-6. **Search content**: Press `Alt+F` to search across all notes
+### 📝 **Creating and Organizing Notes**
 
-### Keyboard Shortcuts
-- `Alt+M` - Toggle markdown edit/preview mode
+1. **Create notes**: Create new `.md` files in JupyterLite for your thoughts, research, and ideas
+2. **Use descriptive names**: `project-ideas.md`, `meeting-notes-2024.md`, `research-methods.md`
+3. **Start with structure**: Begin each note with clear headings
+
+```markdown
+# Project Ideas
+
+## AI Research
+Content about AI research ideas...
+
+## Web Development  
+Ideas for web development projects...
+```
+
+### 🔗 **Linking Your Knowledge**
+
+#### Basic Wikilinks
+Connect related concepts using `[[double brackets]]`:
+
+```markdown
+See also [[research-methods]] for our methodology.
+The findings support our [[initial-hypothesis|original theory]].
+Check the [[data-analysis.ipynb]] notebook for calculations.
+```
+
+**Syntax Options:**
+- `[[filename]]` - Links to filename.md
+- `[[filename|Display Text]]` - Custom display text
+- `[[notebook.ipynb]]` - Links to Jupyter notebooks  
+- `[[data.csv]]` - Links to data files
+
+**Autocomplete**: Type `[[` and get suggestions for existing files with ↑/↓ navigation.
+
+### 📚 **Block Embedding for Reusable Content**
+
+Embed content from other notes using `![[double brackets]]`:
+
+#### Embed by Heading
+```markdown
+![[research-methods.md#Data Collection]]
+![[literature-review.md#Introduction]]
+```
+
+#### Embed by Block ID
+First, mark content in your source files:
+```markdown
+Our key finding is that user engagement increases by 40%. ^key-finding
+
+The methodology involves three phases of data collection. ^methodology-overview
+```
+
+Then embed specific blocks:
+```markdown
+![[findings.md#key-finding]]
+![[methods.md#methodology-overview|Our Research Approach]]
+```
+
+**What You Get:**
+```markdown
+---
+
+**📄 findings.md#key-finding** *(🕒 5/30/2025, 11:15:30 AM)*
+
+Our key finding is that user engagement increases by 40%.
+
+---
+```
+
+### 🎛️ **View Management**
+
+#### Toggle Between Edit and Preview
+- **Button**: Click the toggle in the bottom-left panel
+- **Keyboard**: Press `Alt+M` 
+- **Behavior**: Switches the current tab between source and rendered view
+
+The button shows your current state:
+- "👁 Switch to Preview" (when in edit mode)
+- "📝 Switch to Edit" (when in preview mode)  
+- "📄 No Markdown File" (when other files are focused)
+
+### 🔍 **Finding and Connecting Information**
+
+#### Cross-File Search (`Alt+F`)
+- Search across all markdown files and notebooks
+- Real-time results with context
+- Click results to jump to that file
+
+#### Backlinks Panel (`Alt+B`)  
+- See which notes link to your current file
+- Click any backlink to open the source file
+- Auto-updates when you switch files
+
+#### Navigation
+- In preview click any wikilink to open the target file
+- Broken links (red) let you create new files on-click
+- Files open in the appropriate mode (edit/preview)
+
+### 🧠 **PKM Workflows and Best Practices**
+
+#### 1. **Daily Note-Taking**
+```markdown
+# 2024-05-30 Daily Notes
+
+## Meetings
+- [[team-standup]] - discussed [[project-alpha]]
+- Key decision: ![[project-alpha.md#timeline|Project Timeline]]
+
+## Ideas
+- New research direction: [[ai-ethics-framework]]
+- Follow up on [[user-research.md#pain-points]]
+
+## Tasks
+- Review [[literature-review.md#recent-studies]]
+- Update [[methodology.md#data-collection]]
+```
+
+#### 2. **Research and Literature Management**
+```markdown
+# Literature Review
+
+## Key Papers
+[[smith-2024]] argues that ![[smith-2024.md#main-thesis]]
+
+## Methodology Insights  
+![[methods-paper-1.md#statistical-approach]]
+![[methods-paper-2.md#qualitative-framework|Qualitative Methods]]
+
+## Synthesis
+The papers agree on [[common-themes]] but differ on [[methodological-approaches]].
+```
+
+#### 3. **Project Organization**
+```markdown
+# Project Alpha
+
+## Overview
+![[project-planning.md#objectives]]
+
+## Current Status
+- Phase 1: ![[phase-1-report.md#summary]]
+- Next steps: [[phase-2-planning]]
+
+## Resources
+- Data: [[datasets.md#primary-sources]]
+- Tools: [[analysis-tools.ipynb]]
+- Team: [[team-contacts.md#project-alpha-team]]
+```
+
+#### 4. **Learning and Skill Development**
+```markdown
+# Machine Learning Study
+
+## Concepts
+- [[supervised-learning]] - basic principles
+- [[neural-networks]] - ![[deep-learning-notes.md#key-concepts]]
+
+## Practice
+- Completed: [[ml-project-1.ipynb]]
+- In progress: [[ml-project-2.ipynb]]
+
+## Resources
+- Course notes: ![[ml-course.md#week-3-summary]]
+- Key papers: [[important-ml-papers]]
+```
+
+### ⌨️ **Keyboard Shortcuts**
+- `Alt+M` - Toggle current file edit/preview mode
 - `Alt+B` - Open/close backlinks panel  
 - `Alt+F` - Open search panel
+- `Alt+S` - Save current file (standard JupyterLite)
 
-### Wikilink Syntax
-- `[[filename]]` - Link to filename.md
-- `[[filename|Display Text]]` - Link with custom display text
-- `[[data.csv]]` - Link to CSV files
-- `[[notebook.ipynb]]` - Link to Jupyter notebooks
+### 🎯 **Advanced Tips**
+
+#### Organizing Block IDs
+Use consistent naming patterns:
+```markdown
+Main findings go here. ^findings-2024-05
+Methodology details. ^method-data-collection  
+Contact information. ^contacts-updated
+```
+
+#### Creating Reference Notes
+Build "index" notes that link to everything:
+```markdown
+# Research Index
+
+## Active Projects
+- [[project-alpha]] - AI ethics framework
+- [[project-beta]] - User experience study
+
+## Methodologies  
+- ![[methods.md#quantitative|Quantitative Approaches]]
+- ![[methods.md#qualitative|Qualitative Approaches]]
+
+## Key Findings
+- ![[findings-2024.md#breakthrough]]
+- ![[user-study.md#main-insights]]
+```
+
+#### Mixing Notebooks and Markdown
+```markdown
+# Analysis Report
+
+## Data Processing
+See the full analysis in [[data-cleaning.ipynb]]
+
+## Key Results
+![[results-summary.md#main-findings]]
+
+## Visualization
+The charts in [[visualization.ipynb]] show the trends.
+```
+
+### 🚀 **Getting Started Workflow**
+
+1. **Create your first note**: Start with `start.md` or `index.md`
+2. **Add some structure**: Use headings and mark important content with `^block-ids`
+3. **Create connections**: Link related concepts with `[[wikilinks]]`
+4. **Embed key content**: Use `![[embeds]]` for reusable information
+5. **Explore and connect**: Use search (`Alt+F`) and backlinks (`Alt+B`) to discover connections
+6. **Iterate and grow**: Keep adding notes and connections as your knowledge grows
+
+This extension turns JupyterLite into a powerful tool for building and navigating your personal knowledge network!
 
 ## Architecture
 
