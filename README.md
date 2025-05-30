@@ -2,6 +2,8 @@
 
 A JupyterLite extension that enhances markdown editing with personal knowledge management features inspired by tools like Obsidian.
 
+Live demo as we test at [XLabCU/jupyterlite-testing](https://XLabCU.github.io/jupyterlite-testing)
+
 ### 🔗 Wikilinks ✅
 - **Basic syntax**: `[[Note Title]]` - links to other markdown files
 - **Aliased links**: `[[actual-note|display text]]` - custom display text  

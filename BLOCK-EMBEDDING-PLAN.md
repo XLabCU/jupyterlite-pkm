@@ -24,7 +24,6 @@ Implement block embedding functionality that allows embedding content from other
 ### Basic Markdown Embedding
 ```markdown
 ![[filename.md#heading]]           # Embed content under heading
-![[filename.md#L10-20]]            # Embed lines 10-20
 ![[filename.md#block-id]]          # Embed by block ID
 ```
 
@@ -161,10 +160,12 @@ src/
 ## 🔄 Implementation Phases
 
 ### Phase 1: Basic Markdown Embedding
-1. Extend wikilink parser for `![[` syntax
-2. Implement markdown content extraction
-3. Basic rendering with timestamps
-4. Simple heading-based references
+~~1. Extend wikilink parser for `![[` syntax~~
+~~2. Implement markdown content extraction~~
+~~3. Basic rendering with timestamps~~
+~~4. Simple heading-based references~~
+
+See [README.md](README.md)
 
 ### Phase 2: Notebook Embedding
 1. Implement .ipynb JSON parsing
@@ -268,46 +269,7 @@ interface EmbedSettings {
 - **`embedding-test.md`** - Comprehensive test cases for all syntax types
 - **`block-embedding-guide.md`** - User documentation and usage examples
 
-### 🐛 **Current Status: Debugging Phase**
-
-**Issue Identified:** Block embeds are parsed correctly but content extraction is failing.
-- Console shows: "Found 9 block embeds"
-- Console shows: "Processing embed: embedding-source.md # Introduction"
-- Result: All embeds show "❌ Block not found" error
-
-**Enhanced Debugging Added:**
-- Detailed file access logging
-- Heading discovery and matching traces
-- Block ID pattern matching verification
-- Available content listing when extraction fails
 
 **Next Steps:**
-1. **Test with enhanced debugging** to identify root cause
-2. **Fix identified issues** (likely file path resolution or content matching)
-3. **Verify functionality** with test files
-4. **Proceed to Phase 2** (Jupyter notebook embedding)
+1. **Proceed to Phase 2** (Jupyter notebook embedding)
 
-### 🔍 **Debug Console Output Expected:**
-```
-Attempting to extract heading "Introduction" from file: embedding-source.md
-File has X lines
-Looking for headings in file: [first 10 lines...]
-Found heading at line Y: "Introduction" (level 1)
-Matched heading "Introduction" at line Y
-Extracted Z lines of content
-```
-
-**OR (if failing):**
-```
-Heading "Introduction" not found in embedding-source.md
-Available headings:
-  Line 0: # Source Document for Embedding Tests
-  Line 4: ## Introduction
-  ...
-```
-
-This will reveal whether the issue is file path resolution, heading text matching, or content parsing.
-
----
-
-This plan provides a comprehensive roadmap for implementing block embedding with special Jupyter notebook support. **Phase 1 implementation is complete** and ready for debugging and testing.
