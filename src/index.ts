@@ -13,6 +13,7 @@ import { searchPlugin } from './search';
 import { backlinksPlugin } from './backlinks';
 import { notebookEmbedPlugin } from './notebook-embed';
 import { blockEmbeddingPlugin } from './block-embedding';
+import { codeCopyPlugin } from './code-copy';
 import { welcomePlugin } from './welcome';
 
 /**
@@ -42,6 +43,7 @@ export default [
   markdownPreviewPlugin,
   wikilinkPlugin,
   blockEmbeddingPlugin,
+  codeCopyPlugin,
   searchPlugin,
   backlinksPlugin,
   notebookEmbedPlugin

@@ -128,3 +128,150 @@
 .pkm-backlinks-link:hover {
   text-decoration: underline;
 }
+
+/* Code block styling with copy functionality */
+.jp-RenderedMarkdown pre {
+  position: relative;
+  background-color: var(--jp-layout-color2, #f5f5f5) !important;
+  border: 1px solid var(--jp-border-color2, #e0e0e0);
+  border-radius: 6px;
+  padding: 16px;
+  margin: 16px 0;
+  overflow-x: auto;
+  font-family: var(--jp-code-font-family, 'Source Code Pro', monospace);
+  font-size: var(--jp-code-font-size, 13px);
+  line-height: 1.4;
+}
+
+.jp-RenderedMarkdown pre:hover .pkm-code-copy-btn,
+.jp-RenderedMarkdown pre:hover .pkm-code-language {
+  opacity: 1;
+}
+
+/* Copy button styling */
+.pkm-code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--jp-layout-color1, #ffffff);
+  border: 1px solid var(--jp-border-color1, #c0c0c0);
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--jp-ui-font-family, sans-serif);
+  color: var(--jp-ui-font-color1, #333333);
+  opacity: 0;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  line-height: 1;
+}
+
+.pkm-code-copy-btn:hover {
+  background: var(--jp-layout-color0, #f8f9fa);
+  border-color: var(--jp-brand-color1, #2196f3);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+}
+
+.pkm-code-copy-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.pkm-code-copy-btn.copied {
+  background: var(--jp-success-color1, #4caf50);
+  color: white;
+  border-color: var(--jp-success-color1, #4caf50);
+}
+
+/* Copy icon */
+.pkm-copy-icon {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+/* Language label styling */
+.pkm-code-language {
+  position: absolute;
+  top: 8px;
+  right: 90px; /* Position to the left of the copy button */
+  background: var(--jp-brand-color1, #2196f3);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  font-family: var(--jp-ui-font-family, sans-serif);
+  letter-spacing: 0.5px;
+  opacity: 0; /* Hidden by default, shown on hover */
+  z-index: 5;
+  line-height: 1;
+  transition: opacity 0.2s ease;
+}
+
+/* Language-specific colors */
+.pkm-code-language.python {
+  background: #3776ab;
+}
+
+.pkm-code-language.r {
+  background: #276dc3;
+}
+
+.pkm-code-language.javascript {
+  background: #f7df1e;
+  color: #000000;
+}
+
+.pkm-code-language.bash, .pkm-code-language.shell {
+  background: #4eaa25;
+}
+
+.pkm-code-language.sql {
+  background: #e38c00;
+}
+
+.pkm-code-language.json {
+  background: #292929;
+}
+
+.pkm-code-language.css {
+  background: #1572b6;
+}
+
+.pkm-code-language.html {
+  background: #e34f26;
+}
+
+/* Code block content adjustments */
+.jp-RenderedMarkdown pre code {
+  background: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  font-size: inherit;
+  line-height: inherit;
+  display: block;
+  overflow-x: auto;
+}
+
+/* Inline code styling (not affected by copy buttons) */
+.jp-RenderedMarkdown p code,
+.jp-RenderedMarkdown li code,
+.jp-RenderedMarkdown td code,
+.jp-RenderedMarkdown th code {
+  background: var(--jp-layout-color2, #f5f5f5) !important;
+  border: 1px solid var(--jp-border-color2, #e0e0e0);
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-family: var(--jp-code-font-family, 'Source Code Pro', monospace);
+  font-size: 0.9em;
+  color: var(--jp-content-font-color1, #333333);
+}

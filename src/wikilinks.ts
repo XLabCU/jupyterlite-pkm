@@ -173,6 +173,205 @@ async function findFile(
 }
 
 /**
+ * Set up Shift+click handling for wikilinks in markdown source editors
+ */
+function setupSourceWikilinkHandling(
+  editorTracker: IEditorTracker,
+  docManager: IDocumentManager
+): void {
+  // Function to handle Shift+click in editor
+  const handleEditorClick = async (editor: any, event: MouseEvent) => {
+    if (!event.shiftKey) {
+      return; // Only handle Shift+click
+    }
+
+    // Get cursor position and text
+    const cursor = editor.getCursorPosition();
+    const text = editor.model.sharedModel.getSource();
+    
+    // Convert cursor position to character offset
+    const lines = text.split('\n');
+    let offset = 0;
+    for (let i = 0; i < cursor.line; i++) {
+      offset += lines[i].length + 1; // +1 for newline
+    }
+    offset += cursor.column;
+
+    // Find wikilink at cursor position
+    const wikilink = findWikilinkAtPosition(text, offset);
+    if (!wikilink) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    console.log('Shift+click on wikilink in source:', wikilink.target);
+
+    // Try to find and open the file
+    const filePath = await findFile(docManager, wikilink.target);
+    
+    if (filePath) {
+      // File exists - open it
+      let factory: string | undefined = undefined;
+      if (filePath.endsWith('.md')) {
+        factory = 'Editor'; // Open in source mode for Shift+click
+      }
+      await docManager.openOrReveal(filePath, factory);
+    } else {
+      // File doesn't exist - offer to create it
+      const result = await showDialog({
+        title: 'Create New Note',
+        body: `Create new note "${wikilink.target}"?`,
+        buttons: [
+          Dialog.cancelButton(),
+          Dialog.okButton({ label: 'Create' })
+        ]
+      });
+      
+      if (result.button.accept) {
+        await createNewFile(docManager, wikilink.target, editorTracker.currentWidget?.context.path || '');
+      }
+    }
+  };
+
+  // Set up click handlers for all current and future markdown editors
+  editorTracker.widgetAdded.connect((sender, widget) => {
+    if (widget.context.path.endsWith('.md')) {
+      const editor = widget.content.editor;
+      
+      // Add click handler to the editor's DOM node
+      const editorNode = editor.host;
+      
+      editorNode.addEventListener('click', (event: MouseEvent) => {
+        handleEditorClick(editor, event);
+      });
+    }
+  });
+
+  // Handle existing editors
+  editorTracker.forEach(widget => {
+    if (widget.context.path.endsWith('.md')) {
+      const editor = widget.content.editor;
+      const editorNode = editor.host;
+      
+      editorNode.addEventListener('click', (event: MouseEvent) => {
+        handleEditorClick(editor, event);
+      });
+    }
+  });
+}
+
+/**
+ * Find wikilink at a specific character position in text
+ */
+function findWikilinkAtPosition(text: string, position: number): WikiLink | null {
+  const codeSpans = findCodeSpans(text);
+  
+  // Skip if position is inside a code span
+  if (isInsideCodeSpan(position, codeSpans)) {
+    return null;
+  }
+
+  const links = parseWikilinks(text);
+  
+  // Find link that contains the position
+  for (const link of links) {
+    if (position >= link.startIndex && position <= link.endIndex) {
+      return link;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Create a new file with appropriate content
+ */
+async function createNewFile(
+  docManager: IDocumentManager, 
+  targetName: string, 
+  currentPath: string
+): Promise<void> {
+  // Get current directory
+  const currentDir = currentPath ? currentPath.substring(0, currentPath.lastIndexOf('/')) : '';
+  
+  // Determine file extension and content
+  const extension = getFileExtension(targetName);
+  const baseName = getBaseName(targetName);
+  const fileName = targetName.includes('.') ? targetName : `${targetName}${extension}`;
+  
+  // Create new file path
+  const newPath = currentDir ? `${currentDir}/${fileName}` : fileName;
+  
+  console.log('Creating new file at:', newPath);
+  
+  if (extension === '.ipynb') {
+    // Use JupyterLab's built-in notebook creation
+    try {
+      const widget = await docManager.createNew(newPath, 'notebook');
+      if (widget) {
+        console.log('Created notebook successfully:', newPath);
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to create notebook with factory:', error);
+    }
+  }
+  
+  // Create appropriate content
+  let content: string;
+  let format: 'text' | 'json' = 'text';
+  
+  switch (extension) {
+    case '.ipynb':
+      content = JSON.stringify({
+        cells: [],
+        metadata: {
+          kernelspec: {
+            display_name: 'Python 3',
+            language: 'python',
+            name: 'python3'
+          }
+        },
+        nbformat: 4,
+        nbformat_minor: 4
+      }, null, 2);
+      format = 'json';
+      break;
+    case '.json':
+      content = JSON.stringify({
+        name: baseName,
+        description: 'Description here'
+      }, null, 2);
+      format = 'json';
+      break;
+    case '.geojson':
+      content = JSON.stringify({
+        type: 'FeatureCollection',
+        features: []
+      }, null, 2);
+      format = 'json';
+      break;
+    case '.csv':
+      content = 'name,value\nexample,1\n';
+      break;
+    default: // .md
+      content = `# ${baseName}\n\n`;
+      break;
+  }
+  
+  await docManager.services.contents.save(newPath, {
+    type: 'file',
+    format: format,
+    content: content
+  });
+  
+  // Open the new file in editor mode
+  await docManager.openOrReveal(newPath, 'Editor');
+}
+
+/**
  * Plugin to handle wikilinks in markdown files
  */
 export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
@@ -196,6 +395,9 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
 
     // Set up wikilink auto-completion
     setupWikilinkCompletion(editorTracker, docManager);
+
+    // Set up Shift+click handling for markdown source editors
+    setupSourceWikilinkHandling(editorTracker, docManager);
 
     // Override the default markdown renderer
     const defaultFactory = rendermime.getFactory('text/markdown');
@@ -339,14 +541,14 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                 const newLink = link.cloneNode(true) as HTMLAnchorElement;
                 link.parentNode?.replaceChild(newLink, link);
                 
-                newLink.addEventListener('click', async (event: Event) => {
+                newLink.addEventListener('click', async (event: MouseEvent) => {
                   event.preventDefault();
                   event.stopPropagation();
                   
                   try {
                     // Get the display text (only thing that survives HTML sanitization)
                     const displayText = newLink.textContent?.trim() || '';
-                    console.log('Click handler - displayText:', displayText);
+                    console.log('Click handler - displayText:', displayText, 'shiftKey:', event.shiftKey);
                     
                     // Look up the original target from our mapping
                     const targetName = wikilinkDisplayToTarget.get(displayText) || '';
@@ -494,7 +696,7 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                       }
                     } else {
                       // Handle existing link - open the file
-                      console.log('Opening existing file. Path from data:', path, 'Target:', targetName);
+                      console.log('Opening existing file. Path from data:', path, 'Target:', targetName, 'Shift+click:', event.shiftKey);
                       
                       if (path && path !== '' && path !== '#') {
                         // We have a valid path, open it in the appropriate mode
@@ -502,7 +704,8 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                         
                         // Only use markdown mode for .md files
                         if (path.endsWith('.md')) {
-                          factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+                          // Shift+click always opens in source mode, regular click respects current mode
+                          factory = event.shiftKey ? 'Editor' : (pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview');
                         }
                         // For other file types, let JupyterLab choose the default factory
                         
@@ -518,7 +721,8 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
                           
                           // Only use markdown mode for .md files
                           if (foundPath.endsWith('.md')) {
-                            factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
+                            // Shift+click always opens in source mode, regular click respects current mode
+                            factory = event.shiftKey ? 'Editor' : (pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview');
                           }
                           // For other file types, let JupyterLab choose the default factory
                           
