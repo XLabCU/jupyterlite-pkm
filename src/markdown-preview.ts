@@ -48,8 +48,9 @@ export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
       widget.node.style.cssText = `
         position: fixed;
         bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
+        left: 20px;
+        width: calc(var(--jp-sidebar-min-width, 240px) - 40px);
+        max-width: 280px;
         z-index: 1000;
         background: var(--jp-layout-color0, #ffffff);
         border: 2px solid var(--jp-brand-color1, #1976d2);
@@ -57,30 +58,33 @@ export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
         padding: 12px;
         margin: 0;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        max-width: 90vw;
       `;
       
       widget.node.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
           <button id="pkm-mode-btn" style="
-            padding: 8px 16px; 
+            padding: 10px 12px; 
             border: 2px solid var(--jp-brand-color1, #1976d2); 
             background: var(--jp-brand-color1, #1976d2);
             color: white;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             transition: all 0.2s ease;
+            width: 100%;
+            text-align: center;
           ">
             📝 Edit Mode
           </button>
-          <span style="color: var(--jp-ui-font-color1); font-size: 14px; font-weight: 500;">
-            Markdown files will open in edit mode
-          </span>
-          <span style="color: var(--jp-ui-font-color2); font-size: 12px; margin-left: auto;">
-            Press Alt+M to toggle
-          </span>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <span style="color: var(--jp-ui-font-color1); font-size: 12px; font-weight: 500; text-align: center;">
+              Markdown files will open in edit mode
+            </span>
+            <span style="color: var(--jp-ui-font-color2); font-size: 11px; text-align: center;">
+              Press Alt+M to toggle
+            </span>
+          </div>
         </div>
       `;
       
