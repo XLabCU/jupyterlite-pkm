@@ -71,12 +71,18 @@ function createWelcomeContent(): Widget {
   const container = document.createElement('div');
   container.style.padding = '10px';
   container.style.maxWidth = '500px';
+  container.style.minHeight = '600px';
   
   container.innerHTML = `
     <p style="margin-bottom: 15px;">
       The <strong>Personal Knowledge Management (PKM) extension</strong> is now active! 
-      This extension transforms JupyterLite into a powerful note-taking and knowledge management system.
+      This extension transforms JupyterLite into a powerful note-taking and knowledge management system.</p>
+      <p>This approach gives you computational reproducibility (notebooks) + narrative synthesis (markdown) + knowledge linking (PKM features).
+  It's like having Jupyter notebooks as your "lab bench" and markdown notes as your "research papers" that can dynamically reference your
+  work!
     </p>
+
+
     
     <h3 style="margin-top: 20px; margin-bottom: 10px;">✨ Key Features</h3>
     
@@ -98,8 +104,9 @@ function createWelcomeContent(): Widget {
     
     <h4 style="margin-top: 15px; margin-bottom: 5px;">⌨️ Keyboard Shortcuts</h4>
     <ul style="margin-left: 20px; margin-bottom: 10px;">
-      <li><kbd>Alt</kbd> + <kbd>M</kbd> - Toggle markdown preview</li>
-      <li><kbd>Alt</kbd> + <kbd>F</kbd> - Global search</li>
+      <li><kbd>Alt</kbd> + <kbd>m</kbd> - Toggle markdown preview</li>
+      <li><kbd>Alt</kbd> + <kbd>f</kbd> - Global search</li>
+      <li><kbd>Alt</kbd> + <kbd>b</kbd> - See what links to a note</li>
     </ul>
     
     <h4 style="margin-top: 15px; margin-bottom: 5px;">💾 Auto-Save</h4>
