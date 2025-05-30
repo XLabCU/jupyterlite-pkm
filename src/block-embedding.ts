@@ -7,6 +7,7 @@ import { IEditorTracker } from '@jupyterlab/fileeditor';
 import { IMarkdownViewerTracker } from '@jupyterlab/markdownviewer';
 import { IRenderMimeRegistry, IRenderMime } from '@jupyterlab/rendermime';
 import { IDocumentManager } from '@jupyterlab/docmanager';
+import { Contents } from '@jupyterlab/services';
 
 /**
  * Regular expression for block embedding syntax
@@ -35,6 +36,51 @@ interface ExtractedBlock {
   blockRef: string;
   extractedAt: Date;
   found: boolean;
+}
+
+/**
+ * Find file by name across all directories, supporting multiple extensions
+ */
+async function findFile(
+  docManager: IDocumentManager,
+  filename: string
+): Promise<string | null> {
+  const contents = docManager.services.contents;
+  
+  // Determine target filename with proper extension
+  const targetName = filename.includes('.') ? filename : `${filename}.md`;
+  console.log('Block embedding - searching for file:', filename, '-> target:', targetName);
+
+  async function searchDirectory(path: string): Promise<string | null> {
+    try {
+      const listing = await contents.get(path, { content: true });
+      
+      if (listing.type !== 'directory' || !listing.content) {
+        return null;
+      }
+
+      console.log(`Block embedding - searching in directory: ${path || 'root'}, found ${listing.content.length} items`);
+      
+      for (const item of listing.content as Contents.IModel[]) {
+        console.log(`  - ${item.name} (${item.type})`);
+        if ((item.type === 'file' || item.type === 'notebook') && item.name === targetName) {
+          console.log(`Block embedding - found match: ${item.path}`);
+          return item.path;
+        } else if (item.type === 'directory') {
+          const found = await searchDirectory(item.path);
+          if (found) {
+            return found;
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Block embedding - error searching directory ${path}:`, error);
+    }
+    
+    return null;
+  }
+
+  return searchDirectory('');
 }
 
 /**
@@ -248,6 +294,24 @@ async function extractBlockContent(
 ): Promise<ExtractedBlock> {
   const extractedAt = new Date();
   
+  console.log(`Block embedding - extracting from "${sourceFile}" block/heading "${blockRef}"`);
+  
+  // First, resolve the file path
+  const resolvedPath = await findFile(docManager, sourceFile);
+  if (!resolvedPath) {
+    console.warn(`Block embedding - could not find file: ${sourceFile}`);
+    return {
+      content: '',
+      title: blockRef,
+      sourceFile,
+      blockRef,
+      extractedAt,
+      found: false
+    };
+  }
+  
+  console.log(`Block embedding - resolved "${sourceFile}" to "${resolvedPath}"`);
+  
   // Determine if it's likely a block ID based on naming patterns
   // Block IDs typically use kebab-case, headings use normal text
   const isLikelyBlockId = /^[a-z0-9-_]+$/.test(blockRef) && blockRef.includes('-');
@@ -258,19 +322,19 @@ async function extractBlockContent(
   if (isLikelyBlockId) {
     // Try as block ID first
     console.log(`"${blockRef}" looks like a block ID, trying block extraction first`);
-    content = await extractByBlockId(docManager, sourceFile, blockRef);
+    content = await extractByBlockId(docManager, resolvedPath, blockRef);
     if (content === null) {
       console.log(`Block ID extraction failed, trying as heading`);
-      content = await extractByHeading(docManager, sourceFile, blockRef);
+      content = await extractByHeading(docManager, resolvedPath, blockRef);
     }
     title = content !== null ? `Block: ${blockRef}` : blockRef;
   } else {
     // Try as heading first
     console.log(`"${blockRef}" looks like a heading, trying heading extraction first`);
-    content = await extractByHeading(docManager, sourceFile, blockRef);
+    content = await extractByHeading(docManager, resolvedPath, blockRef);
     if (content === null) {
       console.log(`Heading extraction failed, trying as block ID`);
-      content = await extractByBlockId(docManager, sourceFile, blockRef);
+      content = await extractByBlockId(docManager, resolvedPath, blockRef);
       title = content !== null ? `Block: ${blockRef}` : blockRef;
     }
   }
