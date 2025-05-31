@@ -6,6 +6,7 @@ import {
 import { ICommandPalette, MainAreaWidget } from '@jupyterlab/apputils';
 import { IEditorTracker } from '@jupyterlab/fileeditor';
 import { IMarkdownViewerTracker } from '@jupyterlab/markdownviewer';
+import { INotebookTracker } from '@jupyterlab/notebook';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { Widget } from '@lumino/widgets';
 
@@ -32,7 +33,8 @@ class BacklinksPanelWidget extends Widget {
   constructor(
     private docManager: IDocumentManager,
     private editorTracker: IEditorTracker,
-    private markdownTracker: IMarkdownViewerTracker
+    private markdownTracker: IMarkdownViewerTracker,
+    private notebookTracker: INotebookTracker
   ) {
     super();
     this.addClass('jp-pkm-backlinks-panel');
@@ -67,29 +69,48 @@ class BacklinksPanelWidget extends Widget {
     // Track when user switches between files
     this.editorTracker.currentChanged.connect(this.handleCurrentChanged, this);
     this.markdownTracker.currentChanged.connect(this.handleCurrentChanged, this);
+    this.notebookTracker.currentChanged.connect(this.handleCurrentChanged, this);
   }
 
   private handleCurrentChanged(): void {
     const editorWidget = this.editorTracker.currentWidget;
     const markdownWidget = this.markdownTracker.currentWidget;
+    const notebookWidget = this.notebookTracker.currentWidget;
     
     console.log('Backlinks: handleCurrentChanged called');
     console.log('Backlinks: editorWidget:', editorWidget?.context?.path);
     console.log('Backlinks: markdownWidget:', markdownWidget?.context?.path);
+    console.log('Backlinks: notebookWidget:', notebookWidget?.context?.path);
     
+    const isTargetFile = (path: string): boolean => {
+      return path.endsWith('.md') || path.endsWith('.ipynb');
+    };
+
     let currentPath = '';
-    if (editorWidget && editorWidget.context.path.endsWith('.md')) {
-      currentPath = editorWidget.context.path;
-    } else if (markdownWidget && markdownWidget.context.path.endsWith('.md')) {
-      currentPath = markdownWidget.context.path;
-    }
+    let widgetType = '';
     
-    console.log('Backlinks: currentPath:', currentPath, 'previous:', this._currentPath);
+    // Check which widget represents the currently focused/active document
+    // Priority: notebook (if active) > editor (if active) > markdown (if active)
+    if (notebookWidget && notebookWidget.context?.path?.endsWith('.ipynb')) {
+      currentPath = notebookWidget.context.path;
+      widgetType = 'notebook';
+    } else if (editorWidget && isTargetFile(editorWidget.context.path)) {
+      currentPath = editorWidget.context.path;
+      widgetType = 'editor';
+    } else if (markdownWidget && markdownWidget.context?.path?.endsWith('.md')) {
+      currentPath = markdownWidget.context.path;
+      widgetType = 'markdown';
+    }
+
+    console.log(`Backlinks: Selected path: "${currentPath}" from ${widgetType} widget`);
+    console.log('Backlinks: Previous path:', this._currentPath);
     
     if (currentPath !== this._currentPath) {
       this._currentPath = currentPath;
       console.log('Backlinks: Path changed, updating backlinks for:', currentPath);
       this.updateBacklinks();
+    } else {
+      console.log('Backlinks: Path unchanged, no update needed');
     }
   }
 
@@ -98,7 +119,7 @@ class BacklinksPanelWidget extends Widget {
       <div class="jp-pkm-backlinks-empty" style="text-align: center; color: var(--jp-ui-font-color2); margin-top: 40px;">
         <div style="font-size: 24px; margin-bottom: 16px;">🔗</div>
         <div style="margin-bottom: 8px;">No backlinks found</div>
-        <div style="font-size: 12px;">Open a markdown file to see its backlinks</div>
+        <div style="font-size: 12px;">Open a markdown or notebook file to see its backlinks</div>
       </div>
     `;
   }
@@ -114,7 +135,13 @@ class BacklinksPanelWidget extends Widget {
       return;
     }
 
-    const currentFileName = this._currentPath.split('/').pop()?.replace(/\.[^/.]+$/, '') || '';
+    const currentFileName = (() => {
+      const fullName = this._currentPath.split('/').pop() || '';
+      if (fullName.endsWith('.ipynb')) {
+        return fullName; // Keep full name for notebooks
+      }
+      return fullName.replace(/\.[^/.]+$/, ''); // Strip extension for markdown
+    })();
     console.log('Backlinks: Looking for backlinks to file:', currentFileName);
     
     this.searchForBacklinks(currentFileName);
@@ -124,80 +151,75 @@ class BacklinksPanelWidget extends Widget {
     const backlinks: Backlink[] = [];
     
     try {
-      const listing = await this.docManager.services.contents.get('', { type: 'directory' });
+      // Get all markdown and notebook files recursively
+      const allFiles = await this.getAllMarkdownAndNotebookFiles('');
+      console.log(`Backlinks: Found ${allFiles.length} total files to search`);
       
-      const promises = listing.content
-        .filter((item: any) => item && (item.name.endsWith('.md') || item.name.endsWith('.ipynb')))
-        .map(async (item: any) => {
-          try {
-            console.log(`Backlinks: Processing file ${item.name} for links to ${currentFileName}`);
-            const content = await this.docManager.services.contents.get(item.path, { content: true });
-            console.log(`Backlinks: Successfully got content for ${item.name}`, typeof content.content);
-            
-            let textContent = '';
-            if (item.name.endsWith('.md')) {
-              // Handle different content formats that JupyterLab might return
-              if (typeof content.content === 'string') {
-                textContent = content.content;
-              } else if (content.content && typeof content.content === 'object') {
-                // If content is an object, try to extract text
-                textContent = JSON.stringify(content.content);
-                console.log(`Backlinks: ${item.name} content is object:`, content.content);
-              } else {
-                console.log(`Backlinks: ${item.name} unexpected content format:`, content);
-                textContent = '';
-              }
-              console.log(`Backlinks: ${item.name} is markdown, content type:`, typeof textContent, 'length:', textContent ? textContent.length : 'null');
-            } else if (item.name.endsWith('.ipynb')) {
-              const notebook = content.content;
-              if (notebook.cells) {
-                textContent = notebook.cells
-                  .filter((cell: any) => cell.cell_type === 'markdown')
-                  .map((cell: any) => cell.source.join ? cell.source.join('') : cell.source)
-                  .join('\n');
-              }
+      const promises = allFiles.map(async (filePath: string) => {
+        try {
+          const fileName = filePath.split('/').pop() || '';
+          console.log(`Backlinks: Processing file ${fileName} for links to ${currentFileName}`);
+          const content = await this.docManager.services.contents.get(filePath, { content: true });
+          console.log(`Backlinks: Successfully got content for ${fileName}`, typeof content.content);
+          
+          let textContent = '';
+          if (fileName.endsWith('.md')) {
+            // Handle different content formats that JupyterLab might return
+            if (typeof content.content === 'string') {
+              textContent = content.content;
+            } else if (content.content && typeof content.content === 'object') {
+              // If content is an object, try to extract text
+              textContent = JSON.stringify(content.content);
+              console.log(`Backlinks: ${fileName} content is object:`, content.content);
+            } else {
+              console.log(`Backlinks: ${fileName} unexpected content format:`, content);
+              textContent = '';
             }
-            
-            console.log(`Backlinks: File ${item.name} content length: ${textContent.length}`);
-            console.log(`Backlinks: File ${item.name} contains '[[start]]':`, textContent.includes('[[start]]'));
-            console.log(`Backlinks: File ${item.name} contains '[[${currentFileName}]]':`, textContent.includes(`[[${currentFileName}]]`));
-            
-            // Simple test - log first 200 characters to see if content is real
-            console.log(`Backlinks: First 200 chars of ${item.name}:`, textContent.substring(0, 200));
-            
-            const wikilinkRegex = /\[\[([^\]]+)\]\]/g;
-            let match;
-            let matchCount = 0;
-            const fileBacklinks: Backlink[] = [];
-            
-            while ((match = wikilinkRegex.exec(textContent)) !== null) {
-              matchCount++;
-              const linkText = match[1];
-              const [targetFile] = linkText.split('|');
-              const targetFileName = targetFile.trim();
-              
-              console.log(`Backlinks: Found wikilink in ${item.name}: [[${linkText}]] -> target: "${targetFileName}" (looking for: "${currentFileName}")`);
-              
-              if (targetFileName === currentFileName) {
-                const lineNumber = textContent.substring(0, match.index).split('\n').length;
-                const newBacklink = {
-                  sourceFile: item.path,
-                  targetFile: this._currentPath,
-                  context: this.extractContext(textContent, match.index),
-                  lineNumber
-                };
-                console.log(`Backlinks: FOUND MATCH! Adding backlink:`, newBacklink);
-                fileBacklinks.push(newBacklink);
-              }
-            }
-            
-            console.log(`Backlinks: File ${item.name} processed. Found ${matchCount} total wikilinks, ${fileBacklinks.length} backlinks.`);
-            return fileBacklinks;
-          } catch (error) {
-            console.warn(`Could not read file ${item.name}:`, error);
-            return [];
+            console.log(`Backlinks: ${fileName} is markdown, content type:`, typeof textContent, 'length:', textContent ? textContent.length : 'null');
+          } else if (fileName.endsWith('.ipynb')) {
+            textContent = this.extractNotebookText(content.content);
           }
-        });
+          
+          console.log(`Backlinks: File ${fileName} content length: ${textContent.length}`);
+          console.log(`Backlinks: File ${fileName} contains '[[start]]':`, textContent.includes('[[start]]'));
+          console.log(`Backlinks: File ${fileName} contains '[[${currentFileName}]]':`, textContent.includes(`[[${currentFileName}]]`));
+          
+          // Simple test - log first 200 characters to see if content is real
+          console.log(`Backlinks: First 200 chars of ${fileName}:`, textContent.substring(0, 200));
+          
+          const wikilinkRegex = /\[\[([^\]]+)\]\]/g;
+          let match;
+          let matchCount = 0;
+          const fileBacklinks: Backlink[] = [];
+          
+          while ((match = wikilinkRegex.exec(textContent)) !== null) {
+            matchCount++;
+            const linkText = match[1];
+            const [targetFile] = linkText.split('|');
+            const targetFileName = targetFile.trim();
+            
+            console.log(`Backlinks: Found wikilink in ${fileName}: [[${linkText}]] -> target: "${targetFileName}" (looking for: "${currentFileName}")`);
+            
+            if (targetFileName === currentFileName) {
+              const lineNumber = textContent.substring(0, match.index).split('\n').length;
+              const newBacklink = {
+                sourceFile: filePath,
+                targetFile: this._currentPath,
+                context: this.extractContext(textContent, match.index),
+                lineNumber
+              };
+              console.log(`Backlinks: FOUND MATCH! Adding backlink:`, newBacklink);
+              fileBacklinks.push(newBacklink);
+            }
+          }
+          
+          console.log(`Backlinks: File ${fileName} processed. Found ${matchCount} total wikilinks, ${fileBacklinks.length} backlinks.`);
+          return fileBacklinks;
+        } catch (error) {
+          console.warn(`Could not read file ${filePath}:`, error);
+          return [];
+        }
+      });
       
       console.log('Backlinks: Waiting for all file processing to complete...');
       const allFileBacklinks = await Promise.all(promises);
@@ -219,6 +241,61 @@ class BacklinksPanelWidget extends Widget {
       console.error('Error getting file listing:', error);
       this._container.innerHTML = '<div class="jp-pkm-backlinks-empty">Error loading backlinks</div>';
     }
+  }
+
+  private async getAllMarkdownAndNotebookFiles(path: string): Promise<string[]> {
+    const files: string[] = [];
+    
+    try {
+      const listing = await this.docManager.services.contents.get(path, { type: 'directory' });
+      
+      for (const item of listing.content) {
+        if (item.type === 'directory') {
+          // Recursively search subdirectories
+          const subFiles = await this.getAllMarkdownAndNotebookFiles(item.path);
+          files.push(...subFiles);
+        } else if (item.type === 'file' && (item.name.endsWith('.md') || item.name.endsWith('.ipynb'))) {
+          files.push(item.path);
+        }
+      }
+    } catch (error) {
+      console.warn(`Could not read directory ${path}:`, error);
+    }
+    
+    return files;
+  }
+
+  private extractNotebookText(notebookContent: any): string {
+    if (!notebookContent || !notebookContent.cells || !Array.isArray(notebookContent.cells)) {
+      console.log('Backlinks: Invalid notebook content structure');
+      return '';
+    }
+
+    const markdownCells = notebookContent.cells.filter((cell: any) => cell.cell_type === 'markdown');
+    console.log(`Backlinks: Found ${markdownCells.length} markdown cells in notebook`);
+
+    const textParts: string[] = [];
+    
+    for (const cell of markdownCells) {
+      let cellText = '';
+      
+      if (typeof cell.source === 'string') {
+        cellText = cell.source;
+      } else if (Array.isArray(cell.source)) {
+        cellText = cell.source.join('');
+      } else if (cell.source) {
+        // Handle any other source format
+        cellText = String(cell.source);
+      }
+      
+      if (cellText.trim()) {
+        textParts.push(cellText);
+      }
+    }
+    
+    const result = textParts.join('\n');
+    console.log(`Backlinks: Extracted ${result.length} characters from notebook markdown cells`);
+    return result;
   }
 
   private extractContext(content: string, matchIndex: number): string {
@@ -308,7 +385,6 @@ class BacklinksPanelWidget extends Widget {
     console.log('Backlinks: Manual refresh called');
     this.handleCurrentChanged();
   }
-
 }
 
 /**
@@ -316,14 +392,15 @@ class BacklinksPanelWidget extends Widget {
  */
 export const backlinksPlugin: JupyterFrontEndPlugin<void> = {
   id: '@jupyterlite/pkm-extension:backlinks',
-  description: 'Display backlinks for markdown files in a side panel',
+  description: 'Display backlinks for markdown and notebook files in a side panel',
   autoStart: true,
-  requires: [IEditorTracker, IMarkdownViewerTracker, IDocumentManager],
+  requires: [IEditorTracker, IMarkdownViewerTracker, INotebookTracker, IDocumentManager],
   optional: [ICommandPalette],
   activate: (
     app: JupyterFrontEnd,
     editorTracker: IEditorTracker,
     markdownTracker: IMarkdownViewerTracker,
+    notebookTracker: INotebookTracker,
     docManager: IDocumentManager,
     palette: ICommandPalette | null
   ) => {
@@ -345,7 +422,7 @@ export const backlinksPlugin: JupyterFrontEndPlugin<void> = {
           }
         } else {
           // Create new backlinks panel
-          const widget = new BacklinksPanelWidget(docManager, editorTracker, markdownTracker);
+          const widget = new BacklinksPanelWidget(docManager, editorTracker, markdownTracker, notebookTracker);
           backlinksPanel = new MainAreaWidget({ content: widget });
           backlinksPanel.id = 'pkm-backlinks-panel';
           backlinksPanel.title.label = 'Backlinks';
