@@ -11,6 +11,7 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 import { Widget } from '@lumino/widgets';
 
 const COMMAND_TOGGLE_BACKLINKS = 'pkm:toggle-backlinks-panel';
+const WIKILINK_INDEX_FILE = 'wikilink-index.json';
 
 /**
  * Interface for backlink information
@@ -23,12 +24,23 @@ interface Backlink {
 }
 
 /**
+ * Interface for the wikilink index structure
+ */
+interface WikilinkIndex {
+  links: { [sourceFile: string]: string[] };
+  backlinks: { [targetFile: string]: string[] };
+  contexts: { [key: string]: { context: string; lineNumber: number } }; // key: "sourceFile->targetFile"
+  lastUpdated: string;
+}
+
+/**
  * Widget to display backlinks in a side panel
  */
 class BacklinksPanelWidget extends Widget {
   private _backlinks: Backlink[] = [];
   private _currentPath: string = '';
   private _container!: HTMLDivElement;
+  private _wikilinkIndex: WikilinkIndex | null = null;
 
   constructor(
     private docManager: IDocumentManager,
@@ -43,7 +55,9 @@ class BacklinksPanelWidget extends Widget {
     this.title.iconClass = 'jp-MaterialIcon jp-LinkIcon';
     
     this.createUI();
+    this.loadWikilinkIndex();
     this.setupTracking();
+    this.setupFileWatching();
     
     // Trigger initial update
     setTimeout(() => {
@@ -65,11 +79,229 @@ class BacklinksPanelWidget extends Widget {
     this.showEmptyState();
   }
 
+  private async loadWikilinkIndex(): Promise<void> {
+    try {
+      console.log('Backlinks: Loading wikilink index...');
+      const indexContent = await this.docManager.services.contents.get(WIKILINK_INDEX_FILE, { content: true });
+      if (typeof indexContent.content === 'string') {
+        this._wikilinkIndex = JSON.parse(indexContent.content);
+        console.log('Backlinks: Wikilink index loaded successfully');
+      }
+    } catch (error) {
+      console.warn('Backlinks: Could not load wikilink index, building new one...', error);
+      await this.buildWikilinkIndex();
+    }
+  }
+
+  private async buildWikilinkIndex(): Promise<void> {
+    console.log('Backlinks: Building wikilink index...');
+    
+    const index: WikilinkIndex = {
+      links: {},
+      backlinks: {},
+      contexts: {},
+      lastUpdated: new Date().toISOString()
+    };
+
+    try {
+      // Get all markdown and notebook files recursively
+      const allFiles = await this.getAllMarkdownAndNotebookFiles('');
+      console.log(`Backlinks: Found ${allFiles.length} files to index`);
+
+      for (const filePath of allFiles) {
+        try {
+          const fileName = filePath.split('/').pop() || '';
+          console.log(`Backlinks: Indexing ${filePath}`);
+          
+          const content = await this.docManager.services.contents.get(filePath, { content: true });
+          let textContent = '';
+          
+          if (fileName.endsWith('.md')) {
+            textContent = typeof content.content === 'string' ? content.content : '';
+          } else if (fileName.endsWith('.ipynb')) {
+            textContent = this.extractNotebookText(content.content);
+          }
+
+          // Extract wikilinks from this file
+          const wikilinks = this.extractWikilinks(textContent);
+          
+          if (wikilinks.length > 0) {
+            index.links[filePath] = wikilinks.map(link => link.target);
+            
+            // Build backlinks and contexts
+            for (const wikilink of wikilinks) {
+              if (!index.backlinks[wikilink.target]) {
+                index.backlinks[wikilink.target] = [];
+              }
+              index.backlinks[wikilink.target].push(filePath);
+              
+              const contextKey = `${filePath}->${wikilink.target}`;
+              index.contexts[contextKey] = {
+                context: wikilink.context,
+                lineNumber: wikilink.lineNumber
+              };
+            }
+          }
+        } catch (error) {
+          console.warn(`Backlinks: Error indexing ${filePath}:`, error);
+        }
+      }
+
+      this._wikilinkIndex = index;
+      await this.saveWikilinkIndex();
+      console.log('Backlinks: Index built and saved successfully');
+      
+    } catch (error) {
+      console.error('Backlinks: Error building wikilink index:', error);
+    }
+  }
+
+  private async saveWikilinkIndex(): Promise<void> {
+    if (!this._wikilinkIndex) return;
+    
+    try {
+      await this.docManager.services.contents.save(WIKILINK_INDEX_FILE, {
+        type: 'file',
+        format: 'text',
+        content: JSON.stringify(this._wikilinkIndex, null, 2)
+      });
+      console.log('Backlinks: Wikilink index saved successfully');
+    } catch (error) {
+      console.error('Backlinks: Error saving wikilink index:', error);
+    }
+  }
+
+  private extractWikilinks(textContent: string): Array<{target: string, context: string, lineNumber: number}> {
+    const wikilinks: Array<{target: string, context: string, lineNumber: number}> = [];
+    const wikilinkRegex = /\[\[([^\]]+)\]\]/g;
+    let match;
+
+    while ((match = wikilinkRegex.exec(textContent)) !== null) {
+      const linkText = match[1];
+      const [targetFile] = linkText.split('|');
+      const target = targetFile.trim();
+      const lineNumber = textContent.substring(0, match.index).split('\n').length;
+      const context = this.extractContext(textContent, match.index);
+      
+      wikilinks.push({ target, context, lineNumber });
+    }
+
+    return wikilinks;
+  }
+
+  private async getAllMarkdownAndNotebookFiles(path: string): Promise<string[]> {
+    const files: string[] = [];
+    
+    try {
+      const listing = await this.docManager.services.contents.get(path, { type: 'directory' });
+      
+      for (const item of listing.content) {
+        if (item.type === 'directory') {
+          // Recursively search subdirectories
+          const subFiles = await this.getAllMarkdownAndNotebookFiles(item.path);
+          files.push(...subFiles);
+        } else if (item.type === 'file' && (item.name.endsWith('.md') || item.name.endsWith('.ipynb'))) {
+          files.push(item.path);
+        }
+      }
+    } catch (error) {
+      console.warn(`Backlinks: Could not read directory ${path}:`, error);
+    }
+    
+    return files;
+  }
+
   private setupTracking(): void {
     // Track when user switches between files
     this.editorTracker.currentChanged.connect(this.handleCurrentChanged, this);
     this.markdownTracker.currentChanged.connect(this.handleCurrentChanged, this);
     this.notebookTracker.currentChanged.connect(this.handleCurrentChanged, this);
+  }
+
+  private setupFileWatching(): void {
+    // Listen for file saves to update the index
+    this.docManager.services.contents.fileChanged.connect(this.handleFileChanged, this);
+  }
+
+  private async handleFileChanged(sender: any, change: any): Promise<void> {
+    if (!change || !change.newValue || !change.newValue.path) return;
+    
+    const filePath = change.newValue.path;
+    const fileName = filePath.split('/').pop() || '';
+    
+    // Only process markdown and notebook files
+    if (!fileName.endsWith('.md') && !fileName.endsWith('.ipynb')) return;
+    
+    console.log(`Backlinks: File changed: ${filePath}, updating index...`);
+    await this.updateFileInIndex(filePath);
+  }
+
+  private async updateFileInIndex(filePath: string): Promise<void> {
+    if (!this._wikilinkIndex) {
+      await this.buildWikilinkIndex();
+      return;
+    }
+
+    try {
+      // Remove old entries for this file
+      delete this._wikilinkIndex.links[filePath];
+      
+      // Remove old backlinks pointing to this file
+      for (const [target, sources] of Object.entries(this._wikilinkIndex.backlinks)) {
+        this._wikilinkIndex.backlinks[target] = sources.filter(source => source !== filePath);
+        if (this._wikilinkIndex.backlinks[target].length === 0) {
+          delete this._wikilinkIndex.backlinks[target];
+        }
+      }
+      
+      // Remove old contexts for this file
+      for (const contextKey of Object.keys(this._wikilinkIndex.contexts)) {
+        if (contextKey.startsWith(`${filePath}->`)) {
+          delete this._wikilinkIndex.contexts[contextKey];
+        }
+      }
+
+      // Re-index this file
+      const content = await this.docManager.services.contents.get(filePath, { content: true });
+      const fileName = filePath.split('/').pop() || '';
+      let textContent = '';
+      
+      if (fileName.endsWith('.md')) {
+        textContent = typeof content.content === 'string' ? content.content : '';
+      } else if (fileName.endsWith('.ipynb')) {
+        textContent = this.extractNotebookText(content.content);
+      }
+
+      const wikilinks = this.extractWikilinks(textContent);
+      
+      if (wikilinks.length > 0) {
+        this._wikilinkIndex.links[filePath] = wikilinks.map(link => link.target);
+        
+        for (const wikilink of wikilinks) {
+          if (!this._wikilinkIndex.backlinks[wikilink.target]) {
+            this._wikilinkIndex.backlinks[wikilink.target] = [];
+          }
+          this._wikilinkIndex.backlinks[wikilink.target].push(filePath);
+          
+          const contextKey = `${filePath}->${wikilink.target}`;
+          this._wikilinkIndex.contexts[contextKey] = {
+            context: wikilink.context,
+            lineNumber: wikilink.lineNumber
+          };
+        }
+      }
+
+      this._wikilinkIndex.lastUpdated = new Date().toISOString();
+      await this.saveWikilinkIndex();
+      
+      // Refresh backlinks if this affects the current file
+      if (this._currentPath) {
+        this.updateBacklinks();
+      }
+      
+    } catch (error) {
+      console.error(`Backlinks: Error updating index for ${filePath}:`, error);
+    }
   }
 
   private handleCurrentChanged(): void {
@@ -127,14 +359,18 @@ class BacklinksPanelWidget extends Widget {
   private updateBacklinks(): void {
     console.log('Backlinks: updateBacklinks called for path:', this._currentPath);
     this._backlinks = [];
-    this._container.innerHTML = '';
 
     if (!this._currentPath) {
-      this._container.innerHTML = '<div class="jp-pkm-backlinks-empty">No file selected</div>';
-      console.log('Backlinks: No current path, showing empty state');
+      this.showEmptyState();
       return;
     }
 
+    if (!this._wikilinkIndex) {
+      this._container.innerHTML = '<div class="jp-pkm-backlinks-empty">Wikilink index not loaded</div>';
+      return;
+    }
+
+    // Get the target filename for lookup
     const currentFileName = (() => {
       const fullName = this._currentPath.split('/').pop() || '';
       if (fullName.endsWith('.ipynb')) {
@@ -142,127 +378,27 @@ class BacklinksPanelWidget extends Widget {
       }
       return fullName.replace(/\.[^/.]+$/, ''); // Strip extension for markdown
     })();
+
     console.log('Backlinks: Looking for backlinks to file:', currentFileName);
-    
-    this.searchForBacklinks(currentFileName);
-  }
 
-  private async searchForBacklinks(currentFileName: string): Promise<void> {
-    const backlinks: Backlink[] = [];
-    
-    try {
-      // Get all markdown and notebook files recursively
-      const allFiles = await this.getAllMarkdownAndNotebookFiles('');
-      console.log(`Backlinks: Found ${allFiles.length} total files to search`);
-      
-      const promises = allFiles.map(async (filePath: string) => {
-        try {
-          const fileName = filePath.split('/').pop() || '';
-          console.log(`Backlinks: Processing file ${fileName} for links to ${currentFileName}`);
-          const content = await this.docManager.services.contents.get(filePath, { content: true });
-          console.log(`Backlinks: Successfully got content for ${fileName}`, typeof content.content);
-          
-          let textContent = '';
-          if (fileName.endsWith('.md')) {
-            // Handle different content formats that JupyterLab might return
-            if (typeof content.content === 'string') {
-              textContent = content.content;
-            } else if (content.content && typeof content.content === 'object') {
-              // If content is an object, try to extract text
-              textContent = JSON.stringify(content.content);
-              console.log(`Backlinks: ${fileName} content is object:`, content.content);
-            } else {
-              console.log(`Backlinks: ${fileName} unexpected content format:`, content);
-              textContent = '';
-            }
-            console.log(`Backlinks: ${fileName} is markdown, content type:`, typeof textContent, 'length:', textContent ? textContent.length : 'null');
-          } else if (fileName.endsWith('.ipynb')) {
-            textContent = this.extractNotebookText(content.content);
-          }
-          
-          console.log(`Backlinks: File ${fileName} content length: ${textContent.length}`);
-          console.log(`Backlinks: File ${fileName} contains '[[start]]':`, textContent.includes('[[start]]'));
-          console.log(`Backlinks: File ${fileName} contains '[[${currentFileName}]]':`, textContent.includes(`[[${currentFileName}]]`));
-          
-          // Simple test - log first 200 characters to see if content is real
-          console.log(`Backlinks: First 200 chars of ${fileName}:`, textContent.substring(0, 200));
-          
-          const wikilinkRegex = /\[\[([^\]]+)\]\]/g;
-          let match;
-          let matchCount = 0;
-          const fileBacklinks: Backlink[] = [];
-          
-          while ((match = wikilinkRegex.exec(textContent)) !== null) {
-            matchCount++;
-            const linkText = match[1];
-            const [targetFile] = linkText.split('|');
-            const targetFileName = targetFile.trim();
-            
-            console.log(`Backlinks: Found wikilink in ${fileName}: [[${linkText}]] -> target: "${targetFileName}" (looking for: "${currentFileName}")`);
-            
-            if (targetFileName === currentFileName) {
-              const lineNumber = textContent.substring(0, match.index).split('\n').length;
-              const newBacklink = {
-                sourceFile: filePath,
-                targetFile: this._currentPath,
-                context: this.extractContext(textContent, match.index),
-                lineNumber
-              };
-              console.log(`Backlinks: FOUND MATCH! Adding backlink:`, newBacklink);
-              fileBacklinks.push(newBacklink);
-            }
-          }
-          
-          console.log(`Backlinks: File ${fileName} processed. Found ${matchCount} total wikilinks, ${fileBacklinks.length} backlinks.`);
-          return fileBacklinks;
-        } catch (error) {
-          console.warn(`Could not read file ${filePath}:`, error);
-          return [];
-        }
-      });
-      
-      console.log('Backlinks: Waiting for all file processing to complete...');
-      const allFileBacklinks = await Promise.all(promises);
-      console.log('Backlinks: All promises resolved, processing results...');
-      
-      // Flatten the array of arrays
-      for (const fileBacklinks of allFileBacklinks) {
-        if (fileBacklinks && fileBacklinks.length > 0) {
-          console.log('Backlinks: Adding', fileBacklinks.length, 'backlinks from a file');
-          backlinks.push(...fileBacklinks);
-        }
-      }
-      
-      console.log('Backlinks: Found', backlinks.length, 'backlinks:', backlinks);
-      this._backlinks = backlinks;
-      this.renderBacklinks();
-      
-    } catch (error) {
-      console.error('Error getting file listing:', error);
-      this._container.innerHTML = '<div class="jp-pkm-backlinks-empty">Error loading backlinks</div>';
-    }
-  }
+    // Look up backlinks from the index
+    const sourceFiles = this._wikilinkIndex.backlinks[currentFileName] || [];
+    console.log('Backlinks: Found source files:', sourceFiles);
 
-  private async getAllMarkdownAndNotebookFiles(path: string): Promise<string[]> {
-    const files: string[] = [];
-    
-    try {
-      const listing = await this.docManager.services.contents.get(path, { type: 'directory' });
+    this._backlinks = sourceFiles.map(sourceFile => {
+      const contextKey = `${sourceFile}->${currentFileName}`;
+      const contextData = this._wikilinkIndex!.contexts[contextKey];
       
-      for (const item of listing.content) {
-        if (item.type === 'directory') {
-          // Recursively search subdirectories
-          const subFiles = await this.getAllMarkdownAndNotebookFiles(item.path);
-          files.push(...subFiles);
-        } else if (item.type === 'file' && (item.name.endsWith('.md') || item.name.endsWith('.ipynb'))) {
-          files.push(item.path);
-        }
-      }
-    } catch (error) {
-      console.warn(`Could not read directory ${path}:`, error);
-    }
-    
-    return files;
+      return {
+        sourceFile,
+        targetFile: this._currentPath,
+        context: contextData?.context || '',
+        lineNumber: contextData?.lineNumber || 1
+      };
+    });
+
+    console.log('Backlinks: Found', this._backlinks.length, 'backlinks:', this._backlinks);
+    this.renderBacklinks();
   }
 
   private extractNotebookText(notebookContent: any): string {
@@ -385,6 +521,12 @@ class BacklinksPanelWidget extends Widget {
     console.log('Backlinks: Manual refresh called');
     this.handleCurrentChanged();
   }
+
+  public async rebuildIndex(): Promise<void> {
+    console.log('Backlinks: Rebuilding index...');
+    await this.buildWikilinkIndex();
+    this.updateBacklinks();
+  }
 }
 
 /**
@@ -435,10 +577,27 @@ export const backlinksPlugin: JupyterFrontEndPlugin<void> = {
       }
     });
 
+    // Command to rebuild wikilink index
+    app.commands.addCommand('pkm:rebuild-wikilink-index', {
+      label: 'Rebuild Wikilink Index',
+      caption: 'Rebuild the wikilink index from all files',
+      execute: async () => {
+        if (backlinksPanel && !backlinksPanel.isDisposed) {
+          const widget = backlinksPanel.content as BacklinksPanelWidget;
+          await widget.rebuildIndex();
+        }
+      }
+    });
+
     // Add to command palette
     if (palette) {
       palette.addItem({
         command: COMMAND_TOGGLE_BACKLINKS,
+        category: 'PKM'
+      });
+      
+      palette.addItem({
+        command: 'pkm:rebuild-wikilink-index',
         category: 'PKM'
       });
     }
