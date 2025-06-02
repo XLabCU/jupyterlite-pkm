@@ -1,372 +1,257 @@
 # JupyterLite Personal Knowledge Management Extension
 
-A JupyterLite extension that enhances markdown editing with personal knowledge management features inspired by tools like Obsidian.
+Transform your JupyterLite into a Personal Knowledge Management (PKM) system with wikilinks, backlinks, search, and notebook cell embedding capabilities.
 
-Live demo as we test at [XLabCU/jupyterlite-testing](https://XLabCU.github.io/jupyterlite-testing)
+## 🌟 Overview
 
-### 🔗 Wikilinks ✅
-- **Basic syntax**: `[[Note Title]]` - links to other markdown files
-- **Aliased links**: `[[actual-note|display text]]` - custom display text  
-- **Multi-file support**: Links to `.md`, `.ipynb`, `.csv`, `.json`, `.geojson` files
-- **Note creation**: Click on broken links to create new notes
-- **Code span protection**: Ignores wikilinks inside backticks
-- **Auto complete**: Typing `[[` will open an auto-complete dropdown (Bug: if cursor is adjacent to `]]` autocomplete still tries to suggestion completions, drawing from text of the open note)
+This extension bridges the gap between computational notebooks and knowledge management, combining:
+- **Jupyter's computational power** for data analysis and code development
+- **Markdown's simplicity** for note-taking and documentation  
+- **PKM features** for connecting and organizing knowledge
 
-### 📝 Markdown Mode Switching ✅
-- **Toggle preview**: Press `Alt+M` to switch between edit and preview modes
-- **Floating toggle button**: Visual indicator and easy access
+I imagine this useful for researchers, students, and educators who want to build connected knowledge graphs while maintaining full computational capabilities. I envision instructors using this in the context of classroom or asynchronous instruction in digital humanities; the goal is to permit students to learn both personal knowledge management, dh code development, and documentation practices. A student might then 'graduate' to using a dedicated pkm app like Tangent Notes or Obsidian etc with a development environment properly configured for their machine. But for starting out, this extension combined with jupyterlite offers a gentle on-ramp.
 
-### 🔍 Search ✅  
-- **Cross-file search**: Search markdown content and notebook cells
-- **Keyboard shortcut**: Press `Alt+F` to open search
-- **Real-time results**: Shows matches with context and file locations
+## ✨ Key Features
 
-### 🔗 Backlinks ✅
-- **Side panel**: Press `Alt+B` to open backlinks panel
-- **Manual-refresh**: Updates when panel closed/re-opened
-- **Click navigation**: Click any backlink to open the source file
-- **Context display**: Shows surrounding text for each backlink
+### 🔗 **Wikilinks & Navigation**
+- **Link syntax**: `[[Note Name]]` or `[[file|Display Text]]`
+- **Multi-format support**: Link to `.md`, `.ipynb`, `.csv`, `.json`, `.geojson` files
+- **Auto-completion**: Type `[[` for smart file suggestions
+- **Click navigation**: Ctrl/Cmd+click to follow links
+- **Broken link creation**: Click red links to create new files
 
-### 📊 IPYNB Notebook Cell Embedding (Phase 2)
-
-1. Cell Index Detection: Recognizes cell:N patterns in block references
-2. Cell Type Support: Handles code, output, markdown, and full cell types
-3. Notebook Parsing: Extracts content from .ipynb JSON structure
-4. Output Handling: Processes different output types (stream, results, errors, images)
-5. Enhanced Rendering:
-    - Special icons for different cell types (📓💻, 📓📊, 📓📝)
-    - Syntax highlighting for code cells
-    - Execution count display [1]
-    - Separate formatting for code vs output
-
-## Installation
-
-### Prerequisites
-- Python 3.8+
-- Node.js 16+
-- JupyterLite environment
-
-### Install from Source
-
-1. **Clone the repository**:
-```bash
-git clone https://github.com/your-repo/jupyterlite-pkm-extension
-cd jupyterlite-pkm-extension
-```
-
-2. **Install Python dependencies and build**:
-```bash
-pip install -e .
-```
-
-3. **Build the extension**:
-```bash
-npm install
-npm run build
-```
-
-4. **Install in development mode**:
-```bash
-pip install -e .
-```
-
-The extension will be automatically available in your JupyterLite environment.
-
-## Development
-
-### Setup
-
-```bash
-# Clone the repo
-git clone https://github.com/XLabCU/jupyterlite-pkm
-cd jupyterlite-pkm
-
-# Install dependencies
-npm install
-
-# Build the extension
-npm run build
-
-# Watch for changes
-npm run watch
-```
-
-### Building
-
-```bash
-# Build for development
-npm run build
-
-# Build for production
-npm run build:prod
-
-# Build Python package
-python -m build
-```
-
-## How to Use This Extension for Personal Knowledge Management
-
-This extension transforms JupyterLite into a PKM system. I envision instructors using this in the context of classroom or asynchronous instruction in digital humanities; the goal is to permit students to learn both personal knowledge management, dh code development, and documentation practices. A student might then 'graduate' to using a dedicated pkm app like Tangent Notes or Obsidian etc with a development environment properly configured for their machine. But for starting out, this extension combined with jupyterlite offers a gentle on-ramp.
-
-Here's your complete guide:
-
-### 📝 **Creating and Organizing Notes**
-
-1. **Create notes**: Create new `.md` files in JupyterLite for your thoughts, research, and ideas
-2. **Use descriptive names**: `project-ideas.md`, `meeting-notes-2024.md`, `research-methods.md`
-3. **Start with structure**: Begin each note with clear headings
-
+### 📊 **Notebook Cell Embedding**
+Embed specific cells from Jupyter notebooks:
 ```markdown
-# Project Ideas
-
-## AI Research
-Content about AI research ideas...
-
-## Web Development  
-Ideas for web development projects...
+![[analysis.ipynb#cell:5]]        <!-- Full cell (code + output) -->
+![[analysis.ipynb#cell:5:code]]   <!-- Code only -->
+![[analysis.ipynb#cell:5:output]] <!-- Output only -->
 ```
 
-### 🔗 **Linking Your Knowledge**
+**Cell Overview Tool**: Use `PKM: Show Notebook Cell Overview` to see all cells with their IDs, types, and previews.
 
-#### Basic Wikilinks
-Connect related concepts using `[[double brackets]]`:
-
+### 📄 **Block Embedding**
+Reference and embed content from other markdown files:
 ```markdown
-See also [[research-methods]] for our methodology.
-The findings support our [[initial-hypothesis|original theory]].
-Check the [[data-analysis.ipynb]] notebook for calculations.
+![[research-notes#methodology]]     <!-- Embed by heading -->
+![[findings#key-insight]]          <!-- Embed by block ID -->
+![[summary#results|Key Results]]   <!-- With custom title -->
 ```
 
-**Syntax Options:**
-- `[[filename]]` - Links to filename.md
-- `[[filename|Display Text]]` - Custom display text
-- `[[notebook.ipynb]]` - Links to Jupyter notebooks  
-- `[[data.csv]]` - Links to data files
+### 🔍 **Search & Discovery**
+- **Global search** (`Alt+F`): Search across all markdown files and notebooks
+- **Backlinks panel** (`Alt+B`): See which files link to the current file
+- **Real-time results**: Live search with context previews
 
-**Autocomplete**: Type `[[` and get suggestions for existing files with ↑/↓ navigation.
+### 📝 **Editing**
+- **Mode toggle** (`Alt+M`): Switch between edit and preview modes
+- **Auto-preview startup**: Files open in preview mode by default
+- **Floating toggle button**: Visual mode indicator
 
-### 📚 **Block Embedding for Reusable Content**
+## 🚀 Integration with Your JupyterLite Site
 
-Embed content from other notes using `![[double brackets]]`:
+### Install via GitHub Actions Integration
 
-#### Embed by Heading
+I haven't bundled this up for regular distribution as I'm not sure how desirable this is; I've built this for my own teaching first and foremost.
+
+You can fork jupyterlite-as-a-website from [the Jupyterlite Demo](https://github.com/jupyterlite/demo). Then edit the deploy.yml file and make sure you have github pages enabled from workflows. Your deploy.yml should look like this (and I am also installing an R kernel, to show how that can be implemented too):
+
+```yaml
+# .github/workflows/deploy.yml
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install the dependencies
+        run: |
+          python -m pip install -r requirements.txt
+      
+      - name: Get the R Kernel
+        run: |
+          python -m pip install git+https://github.com/r-wasm/jupyterlite-webr-kernel.git
+      
+      - name: Install custom extension
+        run: |
+          # Try installing directly from the git repository
+          pip install git+https://github.com/XLabCU/jupyterlite-pkm.git
+         
+      - name: Build the JupyterLite site
+        run: |
+          cp README.md content
+          jupyter lite build --contents content --output-dir dist
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+
+## 📁 Content Structure
+
+Organize your content directory for optimal PKM experience:
+
+```
+content/
+├── start.md                 # Auto-opens on startup; use as a map-of-content or index
+├── projects/
+│   ├── project-alpha.md
+│   ├── analysis.ipynb
+│   └── data.csv
+├── notes/
+│   ├── daily-notes/
+│   ├── research/
+│   └── ideas/
+└── resources/
+    ├── methodologies.md
+    └── references.md
+```
+
+## 🎯 Use Cases
+
+### 📚 **Academic Research**
+- Link literature reviews to data analysis notebooks
+- Embed key findings across multiple papers
+- Track research progression with connected notes
+
+### 👩‍🏫 **Teaching & Learning**
+- Create interconnected lesson materials
+- Embed live code examples in documentation
+- Build concept maps with executable content
+
+### 💼 **Project Documentation**
+- Connect project plans to implementation notebooks
+- Embed analysis results in reports
+- Maintain living documentation with computational backing
+
+### 🧠 **Personal Knowledge Management**
+- Build a second brain with computational capabilities
+- Connect ideas across disciplines
+- Maintain reproducible research notes
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Alt+M` | Toggle edit/preview mode |
+| `Alt+F` | Open global search |
+| `Alt+B` | Toggle backlinks panel |
+| `Ctrl/Cmd+Click` | Follow wikilink |
+
+Open and close backlinks panel to refresh for the currently file in focus.
+
+## 🛠️ Configuration
+
+### Startup Behavior
+The extension automatically opens `start.md` in preview mode. Create this file in your content root to customize the landing experience.
+
+### Auto-save
+Files are automatically saved every 30 seconds while editing (standard JupyterLite behavior).
+
+### Search Indexing
+Search indexes all `.md` and `.ipynb` files in your content directory and subdirectories.
+
+## 📖 Usage Examples
+
+### Basic Note Linking
 ```markdown
-![[research-methods.md#Data Collection]]
-![[literature-review.md#Introduction]]
-```
-
-#### Embed by Block ID
-First, mark content in your source files:
-```markdown
-Our key finding is that user engagement increases by 40%. ^key-finding
-
-The methodology involves three phases of data collection. ^methodology-overview
-```
-
-Then embed specific blocks:
-```markdown
-![[findings.md#key-finding]]
-![[methods.md#methodology-overview|Our Research Approach]]
-```
-
-**What You Get:**
-```markdown
----
-
-**📄 findings.md#key-finding** *(🕒 5/30/2025, 11:15:30 AM)*
-
-Our key finding is that user engagement increases by 40%.
-
----
-```
-
-#### Embed code blocks, markdown blocks, and output blocks from ipynb files
-
-Format:
-- ![[notebook.ipynb#cell:5]]        <!-- Full cell (code + output) -->
-- ![[notebook.ipynb#cell:5:code]]   <!-- Code only -->
-- ![[notebook.ipynb#cell:5:output]] <!-- Output only -->
-- ![[notebook.ipynb#cell:5:markdown]] <!-- Markdown cell -->
-
-Example Rendered Output:
-
----
-**📓💻 analysis.ipynb#Cell 5:code** *[3]* *(🕒 timestamp)*
-
-```python
-import matplotlib.pyplot as plt
-x = [1, 2, 3, 4]
-plt.plot(x, [i**2 for i in x])
-plt.show()
-```
----
-
-
-
-### 🎛️ **View Management**
-
-#### Toggle Between Edit and Preview
-- **Button**: Click the toggle in the bottom-left panel (still can be buggy; better to use keyboard)
-- **Keyboard**: Press `Alt+M` 
-- **Behavior**: Switches the current tab between source and rendered view
-
-The button shows your current state:
-- "👁 Switch to Preview" (when in edit mode)
-- "📝 Switch to Edit" (when in preview mode)  
-- "📄 No Markdown File" (when other files are focused)
-
-### 🔍 **Finding and Connecting Information**
-
-#### Cross-File Search (`Alt+F`)
-- Search across all markdown files and notebooks
-- Real-time results with context
-- Click results to jump to that file
-
-#### Backlinks Panel (`Alt+B`)  
-- See which notes link to your current file
-- Click any backlink to open the source file
-- Auto-updates when you switch files
-
-#### Navigation
-- In preview click any wikilink to open the target file
-- Broken links (red) let you create new files on-click
-- Files open in the appropriate mode (edit/preview)
-
-### 🧠 **PKM Workflows and Best Practices**
-
-#### 1. **Daily Note-Taking**
-```markdown
-# 2024-05-30 Daily Notes
-
-## Meetings
-- [[team-standup]] - discussed [[project-alpha]]
-- Key decision: ![[project-alpha.md#timeline|Project Timeline]]
-
-## Ideas
-- New research direction: [[ai-ethics-framework]]
-- Follow up on [[user-research.md#pain-points]]
-
-## Tasks
-- Review [[literature-review.md#recent-studies]]
-- Update [[methodology.md#data-collection]]
-```
-
-#### 2. **Research and Literature Management**
-```markdown
-# Literature Review
-
-## Key Papers
-[[smith-2024]] argues that ![[smith-2024.md#main-thesis]]
-
-## Methodology Insights  
-![[methods-paper-1.md#statistical-approach]]
-![[methods-paper-2.md#qualitative-framework|Qualitative Methods]]
-
-## Synthesis
-The papers agree on [[common-themes]] but differ on [[methodological-approaches]].
-```
-
-#### 3. **Project Organization**
-```markdown
-# Project Alpha
+# Research Project Alpha
 
 ## Overview
-![[project-planning.md#objectives]]
+This project builds on [[previous-research]] and explores [[new-methodology]].
 
-## Current Status
-- Phase 1: ![[phase-1-report.md#summary]]
-- Next steps: [[phase-2-planning]]
+## Data Analysis
+See the full analysis in [[analysis.ipynb]] and key findings in [[results-summary]].
 
-## Resources
-- Data: [[datasets.md#primary-sources]]
-- Tools: [[analysis-tools.ipynb]]
-- Team: [[team-contacts.md#project-alpha-team]]
+## Next Steps
+- Review [[literature-review#recent-papers]]
+- Update [[methodology#data-collection]]
+- Prepare [[presentation-draft]]
 ```
 
-#### 4. **Learning and Skill Development**
+### Embedding Computational Results
+
 ```markdown
-# Machine Learning Study
+# Monthly Report
 
-## Concepts
-- [[supervised-learning]] - basic principles
-- [[neural-networks]] - ![[deep-learning-notes.md#key-concepts]]
+## Key Metrics
+![[metrics-analysis.ipynb#cell:3:output]]
 
-## Practice
-- Completed: [[ml-project-1.ipynb]]
-- In progress: [[ml-project-2.ipynb]]
+## Methodology
+![[analysis-methods#statistical-approach]]
 
-## Resources
-- Course notes: ![[ml-course.md#week-3-summary]]
-- Key papers: [[important-ml-papers]]
+## Code Implementation
+![[implementation.ipynb#cell:5:code]]
 ```
+From the command palette, there is a command `pkm: notebook overview` which if triggered when you are looking at an .ipynb file will produce a summary of cell ids so you know what targets to look for when you wish to embed code or output cells.
 
-### ⌨️ **Keyboard Shortcuts**
-- `Alt+M` - Toggle current file edit/preview mode
-- `Alt+B` - Open/close backlinks panel  
-- `Alt+F` - Open search panel
-- `Alt+S` - Save current file (standard JupyterLite)
 
-### 🎯 **Advanced Tips**
-
-#### Organizing Block IDs
-Use consistent naming patterns:
+### Building Knowledge Networks
 ```markdown
-Main findings go here. ^findings-2024-05
-Methodology details. ^method-data-collection  
-Contact information. ^contacts-updated
+# Machine Learning Concepts
+
+## Supervised Learning
+- [[linear-regression]] - ![[ml-basics#linear-models]]
+- [[decision-trees]] - ![[tree-algorithms#overview]]
+
+## Applications
+- [[sentiment-analysis.ipynb#cell:0]] - Text classification example
+- [[image-classification.ipynb#cell:2:output]] - CNN results
 ```
 
-#### Creating Reference Notes
-Build "index" notes that link to everything:
-```markdown
-# Research Index
+## 🤝 Contributing
 
-## Active Projects
-- [[project-alpha]] - AI ethics framework
-- [[project-beta]] - User experience study
+Fork, and do what you will. I'm not likely to do much more with this.
 
-## Methodologies  
-- ![[methods.md#quantitative|Quantitative Approaches]]
-- ![[methods.md#qualitative|Qualitative Approaches]]
+## 📄 License
 
-## Key Findings
-- ![[findings-2024.md#breakthrough]]
-- ![[user-study.md#main-insights]]
-```
+This project is licensed under the CC0 1.0 Universal - see the [LICENSE](LICENSE) file for details.
 
-#### Mixing Notebooks and Markdown
-```markdown
-# Analysis Report
+## 🙏 Acknowledgments
 
-## Data Processing
-See the full analysis in [[data-cleaning.ipynb]]
+- Built on [JupyterLab](https://github.com/jupyterlab/jupyterlab) and [JupyterLite](https://github.com/jupyterlite/jupyterlite)
+- Inspired by [Obsidian](https://obsidian.md/), [Logseq](https://logseq.com/), and [Roam Research](https://roamresearch.com/)
+- Designed for digital humanities education and computational research workflows
 
-## Key Results
-![[results-summary.md#main-findings]]
 
-## Visualization
-The charts in [[visualization.ipynb]] show the trends.
-```
-
-### 🚀 **Getting Started Workflow**
-
-1. **Create your first note**: Start with `start.md` or `index.md`
-2. **Add some structure**: Use headings and mark important content with `^block-ids`
-3. **Create connections**: Link related concepts with `[[wikilinks]]`
-4. **Embed key content**: Use `![[embeds]]` for reusable information
-5. **Explore and connect**: Use search (`Alt+F`) and backlinks (`Alt+B`) to discover connections
-6. **Iterate and grow**: Keep adding notes and connections as your knowledge grows
-
-This extension turns JupyterLite into a powerful tool for building and navigating your personal knowledge network!
-
-## Architecture
-
-The extension is built as a collection of JupyterLab plugins that work together:
-
-- **markdown-preview**: Auto-opens preview for .md files
-- **wikilinks**: Handles wikilink parsing and rendering
-- **wikilink-completer**: Provides auto-completion for wikilinks
-- **backlinks**: Tracks and displays backlinks
-- **notebook-embed**: Handles notebook cell embedding
-- **search**: Provides full-text search functionality
 
