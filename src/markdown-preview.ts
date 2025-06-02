@@ -402,9 +402,41 @@ Start building your knowledge graph!
     editorTracker.widgetAdded.connect(updateToggleVisibility);
     markdownTracker.widgetAdded.connect(updateToggleVisibility);
 
-    // Auto-open start.md on startup (with delay to ensure UI is ready)
-    setTimeout(() => {
-      app.commands.execute(COMMAND_OPEN_START);
+    // Auto-open start.md on startup in preview mode (with delay to ensure UI is ready)
+    setTimeout(async () => {
+      try {
+        // Force preview mode on startup regardless of current mode setting
+        await docManager.openOrReveal('start.md', 'Markdown Preview');
+      } catch (error) {
+        console.log('start.md not found on startup, creating it...');
+        // Create start.md if it doesn't exist
+        try {
+          await docManager.services.contents.save('start.md', {
+            type: 'file',
+            format: 'text',
+            content: `# Welcome to Your PKM System
+
+This is your starting note. Try creating wikilinks:
+
+- [[My First Note]] - Creates a new note
+- [[https://example.com|External Link]] - Links to external sites
+
+## Features:
+- **Wikilinks**: Use [[Note Name]] syntax
+- **Search**: Alt+F to search all notes  
+- **Auto-save**: Your changes are saved automatically
+- **Mode Toggle**: Use the button above or Alt+M to switch between edit and preview modes
+
+Start building your knowledge graph!
+`
+          });
+          
+          // Open the newly created file in preview mode
+          await docManager.openOrReveal('start.md', 'Markdown Preview');
+        } catch (createError) {
+          console.error('Failed to create start.md:', createError);
+        }
+      }
     }, 1000);
   }
 };

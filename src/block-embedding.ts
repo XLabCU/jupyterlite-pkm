@@ -537,14 +537,46 @@ async function extractBlockContent(
 }
 
 /**
- * Parse block embeds from text
+ * Parse block embeds from text, excluding those inside code blocks
  */
 function parseBlockEmbeds(text: string): BlockEmbed[] {
   const embeds: BlockEmbed[] = [];
-  let match;
+  
+  // Find all code blocks (both ``` and ` inline code)
+  const codeBlocks: Array<{start: number, end: number}> = [];
+  
+  // Find fenced code blocks (```)
+  const fencedCodeRegex = /```[\s\S]*?```/g;
+  let codeMatch;
+  while ((codeMatch = fencedCodeRegex.exec(text)) !== null) {
+    codeBlocks.push({
+      start: codeMatch.index,
+      end: codeMatch.index + codeMatch[0].length
+    });
+  }
+  
+  // Find inline code blocks (`)
+  const inlineCodeRegex = /`[^`]+`/g;
+  while ((codeMatch = inlineCodeRegex.exec(text)) !== null) {
+    codeBlocks.push({
+      start: codeMatch.index,
+      end: codeMatch.index + codeMatch[0].length
+    });
+  }
+  
+  // Helper function to check if a position is inside a code block
+  const isInCodeBlock = (position: number): boolean => {
+    return codeBlocks.some(block => position >= block.start && position < block.end);
+  };
 
+  let match;
   BLOCK_EMBED_REGEX.lastIndex = 0;
   while ((match = BLOCK_EMBED_REGEX.exec(text)) !== null) {
+    // Skip if this match is inside a code block
+    if (isInCodeBlock(match.index)) {
+      continue;
+    }
+    
     embeds.push({
       fullMatch: match[0],
       sourceFile: match[1].trim(),
