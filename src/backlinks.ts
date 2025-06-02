@@ -43,6 +43,7 @@ class BacklinksPanelWidget extends Widget {
   private _wikilinkIndex: WikilinkIndex | null = null;
 
   constructor(
+    private app: JupyterFrontEnd,
     private docManager: IDocumentManager,
     private editorTracker: IEditorTracker,
     private markdownTracker: IMarkdownViewerTracker,
@@ -305,36 +306,25 @@ class BacklinksPanelWidget extends Widget {
   }
 
   private handleCurrentChanged(): void {
-    const editorWidget = this.editorTracker.currentWidget;
-    const markdownWidget = this.markdownTracker.currentWidget;
-    const notebookWidget = this.notebookTracker.currentWidget;
-    
     console.log('Backlinks: handleCurrentChanged called');
-    console.log('Backlinks: editorWidget:', editorWidget?.context?.path);
-    console.log('Backlinks: markdownWidget:', markdownWidget?.context?.path);
-    console.log('Backlinks: notebookWidget:', notebookWidget?.context?.path);
     
-    const isTargetFile = (path: string): boolean => {
-      return path.endsWith('.md') || path.endsWith('.ipynb');
-    };
-
+    // Get the currently active widget from the shell
+    const currentWidget = this.app.shell.currentWidget;
+    
     let currentPath = '';
-    let widgetType = '';
     
-    // Check which widget represents the currently focused/active document
-    // Priority: notebook (if active) > editor (if active) > markdown (if active)
-    if (notebookWidget && notebookWidget.context?.path?.endsWith('.ipynb')) {
-      currentPath = notebookWidget.context.path;
-      widgetType = 'notebook';
-    } else if (editorWidget && isTargetFile(editorWidget.context.path)) {
-      currentPath = editorWidget.context.path;
-      widgetType = 'editor';
-    } else if (markdownWidget && markdownWidget.context?.path?.endsWith('.md')) {
-      currentPath = markdownWidget.context.path;
-      widgetType = 'markdown';
+    if (currentWidget) {
+      // Check if the current widget has a context with a path
+      const context = (currentWidget as any).context;
+      if (context && context.path) {
+        const path = context.path;
+        if (path.endsWith('.md') || path.endsWith('.ipynb')) {
+          currentPath = path;
+        }
+      }
     }
-
-    console.log(`Backlinks: Selected path: "${currentPath}" from ${widgetType} widget`);
+    
+    console.log(`Backlinks: Active widget path: "${currentPath}"`);
     console.log('Backlinks: Previous path:', this._currentPath);
     
     if (currentPath !== this._currentPath) {
@@ -552,7 +542,7 @@ export const backlinksPlugin: JupyterFrontEndPlugin<void> = {
 
     // Command to toggle backlinks panel
     app.commands.addCommand(COMMAND_TOGGLE_BACKLINKS, {
-      label: 'Toggle Backlinks Panel',
+      label: 'PKM: Toggle Backlinks Panel',
       caption: 'Show or hide the backlinks panel',
       execute: () => {
         if (backlinksPanel && !backlinksPanel.isDisposed) {
@@ -564,7 +554,7 @@ export const backlinksPlugin: JupyterFrontEndPlugin<void> = {
           }
         } else {
           // Create new backlinks panel
-          const widget = new BacklinksPanelWidget(docManager, editorTracker, markdownTracker, notebookTracker);
+          const widget = new BacklinksPanelWidget(app, docManager, editorTracker, markdownTracker, notebookTracker);
           backlinksPanel = new MainAreaWidget({ content: widget });
           backlinksPanel.id = 'pkm-backlinks-panel';
           backlinksPanel.title.label = 'Backlinks';
@@ -579,7 +569,7 @@ export const backlinksPlugin: JupyterFrontEndPlugin<void> = {
 
     // Command to rebuild wikilink index
     app.commands.addCommand('pkm:rebuild-wikilink-index', {
-      label: 'Rebuild Wikilink Index',
+      label: 'PKM: Rebuild Wikilink Index',
       caption: 'Rebuild the wikilink index from all files',
       execute: async () => {
         if (backlinksPanel && !backlinksPanel.isDisposed) {

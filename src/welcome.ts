@@ -51,7 +51,7 @@ export const welcomePlugin: JupyterFrontEndPlugin<void> = {
     
     // Add command to manually show welcome dialog
     app.commands.addCommand(CommandIDs.showWelcome, {
-      label: 'Show PKM Welcome',
+      label: 'PKM: Show PKM Welcome',
       execute: showWelcomeDialog
     });
     

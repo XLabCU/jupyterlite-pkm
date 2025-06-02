@@ -10,6 +10,7 @@ Live demo as we test at [XLabCU/jupyterlite-testing](https://XLabCU.github.io/ju
 - **Multi-file support**: Links to `.md`, `.ipynb`, `.csv`, `.json`, `.geojson` files
 - **Note creation**: Click on broken links to create new notes
 - **Code span protection**: Ignores wikilinks inside backticks
+- **Auto complete**: Typing `[[` will open an auto-complete dropdown (Bug: if cursor is adjacent to `]]` autocomplete still tries to suggestion completions, drawing from text of the open note)
 
 ### 📝 Markdown Mode Switching ✅
 - **Toggle preview**: Press `Alt+M` to switch between edit and preview modes
@@ -22,23 +23,21 @@ Live demo as we test at [XLabCU/jupyterlite-testing](https://XLabCU.github.io/ju
 
 ### 🔗 Backlinks ✅
 - **Side panel**: Press `Alt+B` to open backlinks panel
-- **Auto-refresh**: Updates when switching between markdown files
+- **Manual-refresh**: Updates when panel closed/re-opened
 - **Click navigation**: Click any backlink to open the source file
 - **Context display**: Shows surrounding text for each backlink
 
-## 🚧 Next Phase Features
+### 📊 IPYNB Notebook Cell Embedding (Phase 2)
 
-### 📊 Notebook Cell Embedding (Phase 2)
-- Embed notebook cells: `![[notebook.ipynb#cell-1]]`
-- Code and output separation: `![[notebook.ipynb#cell-1-code]]`, `![[notebook.ipynb#cell-1-output]]`
-- Cell ranges: `![[notebook.ipynb#cell-range-1-3]]`
-- Live references to computational work
-
-### 🔄 Enhanced Block Features (Phase 3)
-- Refresh embedded content functionality
-- Block transclusion editing
-- Nested embedding support
-- Performance optimizations for large collections
+1. Cell Index Detection: Recognizes cell:N patterns in block references
+2. Cell Type Support: Handles code, output, markdown, and full cell types
+3. Notebook Parsing: Extracts content from .ipynb JSON structure
+4. Output Handling: Processes different output types (stream, results, errors, images)
+5. Enhanced Rendering:
+    - Special icons for different cell types (📓💻, 📓📊, 📓📝)
+    - Syntax highlighting for code cells
+    - Execution count display [1]
+    - Separate formatting for code vs output
 
 ## Installation
 
@@ -107,7 +106,9 @@ python -m build
 
 ## How to Use This Extension for Personal Knowledge Management
 
-This extension transforms JupyterLite into a powerful PKM system. Here's your complete guide:
+This extension transforms JupyterLite into a PKM system. I envision instructors using this in the context of classroom or asynchronous instruction in digital humanities; the goal is to permit students to learn both personal knowledge management, dh code development, and documentation practices. A student might then 'graduate' to using a dedicated pkm app like Tangent Notes or Obsidian etc with a development environment properly configured for their machine. But for starting out, this extension combined with jupyterlite offers a gentle on-ramp.
+
+Here's your complete guide:
 
 ### 📝 **Creating and Organizing Notes**
 
@@ -179,10 +180,33 @@ Our key finding is that user engagement increases by 40%.
 ---
 ```
 
+#### Embed code blocks, markdown blocks, and output blocks from ipynb files
+
+Format:
+- ![[notebook.ipynb#cell:5]]        <!-- Full cell (code + output) -->
+- ![[notebook.ipynb#cell:5:code]]   <!-- Code only -->
+- ![[notebook.ipynb#cell:5:output]] <!-- Output only -->
+- ![[notebook.ipynb#cell:5:markdown]] <!-- Markdown cell -->
+
+Example Rendered Output:
+
+---
+**📓💻 analysis.ipynb#Cell 5:code** *[3]* *(🕒 timestamp)*
+
+```python
+import matplotlib.pyplot as plt
+x = [1, 2, 3, 4]
+plt.plot(x, [i**2 for i in x])
+plt.show()
+```
+---
+
+
+
 ### 🎛️ **View Management**
 
 #### Toggle Between Edit and Preview
-- **Button**: Click the toggle in the bottom-left panel
+- **Button**: Click the toggle in the bottom-left panel (still can be buggy; better to use keyboard)
 - **Keyboard**: Press `Alt+M` 
 - **Behavior**: Switches the current tab between source and rendered view
 

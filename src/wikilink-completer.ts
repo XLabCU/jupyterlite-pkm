@@ -83,18 +83,25 @@ function createAutocompleteDropdown(): HTMLElement {
 }
 
 /**
- * Position dropdown relative to cursor
+ * Position dropdown relative to the [[ position, not cursor
  */
-function positionDropdown(dropdown: HTMLElement, editor: any): void {
+function positionDropdown(dropdown: HTMLElement, editor: any, wikilinkStartColumn: number): void {
   try {
     const position = editor.getCursorPosition();
-    const coords = editor.getCoordinateForPosition(position);
+    
+    // Create a temporary position at the start of the wikilink
+    const wikilinkPosition = {
+      line: position.line,
+      column: wikilinkStartColumn
+    };
+    
+    const coords = editor.getCoordinateForPosition(wikilinkPosition);
     const editorRect = editor.host.getBoundingClientRect();
     
     // Ensure coordinates are valid
     if (coords && editorRect) {
       const left = Math.max(0, editorRect.left + (coords.left || 0));
-      const top = Math.max(0, editorRect.top + (coords.bottom || coords.top || 0) + 5);
+      const top = Math.max(0, editorRect.top + (coords.top || 0));
       
       dropdown.style.left = `${left}px`;
       dropdown.style.top = `${top}px`;
@@ -122,6 +129,7 @@ export function setupWikilinkCompletion(
   let lastCacheTime = 0;
   const CACHE_DURATION = 5000; // 5 seconds
   let isInWikilinkContext = false;
+  let wikilinkStartColumn = 0; // Track where the [[ starts
 
   // Hide dropdown when clicking elsewhere
   document.addEventListener('click', (e) => {
@@ -223,21 +231,42 @@ export function setupWikilinkCompletion(
       const currentLine = lines[line] || '';
       const beforeCursorOnLine = currentLine.substring(0, column);
       
-      // Check if we're in a wikilink context (only look at current line)
-      const match = beforeCursorOnLine.match(/\[\[([^\]|]*)$/);
-      if (!match) {
+      // Check if we're in an INCOMPLETE wikilink context
+      // Must have [[ before cursor, but NO ]] after the last [[
+      const lastOpenBracket = beforeCursorOnLine.lastIndexOf('[[');
+      if (lastOpenBracket === -1) {
+        dropdown.style.display = 'none';
+        isInWikilinkContext = false;
+        return;
+      }
+      
+      // Check if there's a ]] after the last [[ but before cursor
+      const textAfterLastOpen = beforeCursorOnLine.substring(lastOpenBracket);
+      if (textAfterLastOpen.includes(']]')) {
+        dropdown.style.display = 'none';
+        isInWikilinkContext = false;
+        return;
+      }
+      
+      // Extract the prefix after the last [[
+      const prefix = textAfterLastOpen.substring(2); // Remove the [[
+      
+      // Also check that there's no | character (for link aliases)
+      if (prefix.includes('|')) {
         dropdown.style.display = 'none';
         isInWikilinkContext = false;
         return;
       }
 
       isInWikilinkContext = true;
-      const prefix = match[1].toLowerCase();
+      wikilinkStartColumn = lastOpenBracket; // Store position of [[ for dropdown positioning
       
       console.log('Wikilink context detected:', {
         prefix,
         beforeCursorOnLine,
-        match: match[0],
+        lastOpenBracket,
+        wikilinkStartColumn,
+        textAfterLastOpen,
         line: line,
         column: column
       });
@@ -247,10 +276,10 @@ export function setupWikilinkCompletion(
       
       // Filter files by prefix
       suggestions = files
-        .filter(file => file.name.toLowerCase().includes(prefix))
+        .filter(file => file.name.toLowerCase().includes(prefix.toLowerCase()))
         .sort((a, b) => {
-          const aStarts = a.name.toLowerCase().startsWith(prefix);
-          const bStarts = b.name.toLowerCase().startsWith(prefix);
+          const aStarts = a.name.toLowerCase().startsWith(prefix.toLowerCase());
+          const bStarts = b.name.toLowerCase().startsWith(prefix.toLowerCase());
           if (aStarts && !bStarts) return -1;
           if (!aStarts && bStarts) return 1;
           return a.name.localeCompare(b.name);
@@ -314,7 +343,7 @@ export function setupWikilinkCompletion(
     
     dropdown.style.display = 'block';
     if (currentEditor) {
-      positionDropdown(dropdown, currentEditor);
+      positionDropdown(dropdown, currentEditor, wikilinkStartColumn);
     }
   }
 
@@ -352,11 +381,11 @@ export function setupWikilinkCompletion(
       const currentLine = lines[position.line] || '';
       const beforeCursorOnLine = currentLine.substring(0, position.column);
       
-      // Find the [[ before cursor on current line only
-      const match = beforeCursorOnLine.match(/\[\[([^\]|]*)$/);
+      // Find the last [[ before cursor on current line
+      const lastOpenBracket = beforeCursorOnLine.lastIndexOf('[[');
       
-      if (match) {
-        const matchStartOnLine = position.column - match[0].length + 2; // +2 to skip the [[
+      if (lastOpenBracket !== -1) {
+        const matchStartOnLine = lastOpenBracket + 2; // +2 to skip the [[
         const replacement = file.name + ']]';
         
         // Calculate the absolute position in the document
@@ -375,7 +404,7 @@ export function setupWikilinkCompletion(
           absoluteMatchStart,
           absoluteCursorPos,
           replacement,
-          currentText: match[1],
+          lastOpenBracket,
           beforeCursorOnLine
         });
         
@@ -388,7 +417,8 @@ export function setupWikilinkCompletion(
         model.sharedModel.setSource(newText);
         
         // Position cursor after the inserted text
-        const newColumn = position.column + replacement.length - match[1].length;
+        const prefixLength = position.column - matchStartOnLine;
+        const newColumn = position.column + replacement.length - prefixLength;
         const newPosition = {
           line: position.line,
           column: newColumn
@@ -399,7 +429,7 @@ export function setupWikilinkCompletion(
         
         console.log('Insertion completed');
       } else {
-        console.warn('No wikilink match found for insertion');
+        console.warn('No wikilink [[ found for insertion');
       }
     } catch (error) {
       console.error('Error inserting suggestion:', error);

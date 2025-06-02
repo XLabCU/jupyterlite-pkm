@@ -313,7 +313,7 @@ export const searchPlugin: JupyterFrontEndPlugin<void> = {
 
     // Add search command
     app.commands.addCommand(COMMAND_SEARCH, {
-      label: 'Search Notes',
+      label: 'PKM: Search Notes',
       execute: () => {
         const widget = new SearchWidget(docManager);
         const main = new MainAreaWidget({ content: widget });

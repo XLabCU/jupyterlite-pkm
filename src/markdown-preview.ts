@@ -218,7 +218,7 @@ export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
 
     // Add toggle command
     app.commands.addCommand(COMMAND_TOGGLE_MODE, {
-      label: 'Toggle Current Markdown File View',
+      label: 'PKM: Toggle Current Markdown File View',
       execute: async () => {
         // Use the same logic as the button click
         const getCurrentFileMode = (): 'edit' | 'preview' | 'none' => {
@@ -303,7 +303,7 @@ export const markdownPreviewPlugin: JupyterFrontEndPlugin<void> = {
 
     // Add command to open start.md
     app.commands.addCommand(COMMAND_OPEN_START, {
-      label: 'Open Start File',
+      label: 'PKM: Open Start File',
       execute: async () => {
         try {
           const factory = pkmState.markdownMode === 'edit' ? 'Editor' : 'Markdown Preview';
