@@ -36,6 +36,51 @@ interface WikiLink {
 const wikilinkDisplayToTarget = new Map<string, string>();
 
 /**
+ * File path resolution cache to avoid repeated filesystem scans.
+ * Maps filename -> resolved path (or null if not found).
+ * Entries expire after FILE_PATH_CACHE_TTL milliseconds.
+ */
+const filePathCache = new Map<string, { path: string | null; timestamp: number }>();
+const FILE_PATH_CACHE_TTL = 10000; // 10 seconds
+
+/**
+ * Clear expired entries from the file path cache
+ */
+function pruneFilePathCache(): void {
+  const now = Date.now();
+  for (const [key, entry] of filePathCache) {
+    if (now - entry.timestamp > FILE_PATH_CACHE_TTL) {
+      filePathCache.delete(key);
+    }
+  }
+}
+
+/**
+ * Invalidate the file path cache (called when files change)
+ */
+export function invalidateFilePathCache(): void {
+  filePathCache.clear();
+}
+
+/**
+ * Clear wikilinkDisplayToTarget entries for a specific document.
+ * Called when a document is closed to prevent unbounded Map growth.
+ */
+function clearWikilinkMappingsForDocument(documentPath: string): void {
+  const keysToRemove: string[] = [];
+  for (const [key, value] of wikilinkDisplayToTarget) {
+    // Remove entries whose target matches this document's name (without extension)
+    const docName = documentPath.split('/').pop()?.replace(/\.[^/.]+$/, '') || '';
+    if (value === docName || value === documentPath || key.endsWith('_PATH') && value === documentPath) {
+      keysToRemove.push(key);
+    }
+  }
+  for (const key of keysToRemove) {
+    wikilinkDisplayToTarget.delete(key);
+  }
+}
+
+/**
  * Find all code spans in the text (inline code with backticks)
  */
 function findCodeSpans(text: string): Array<{start: number, end: number}> {
@@ -128,28 +173,37 @@ function getBaseName(filename: string): string {
 }
 
 /**
- * Find file by name across all directories, supporting multiple extensions
+ * Find file by name across all directories, supporting multiple extensions.
+ * Uses a time-based cache to avoid repeated filesystem scans.
  */
 async function findFile(
   docManager: IDocumentManager,
   filename: string
 ): Promise<string | null> {
   const contents = docManager.services.contents;
-  
+
   // Determine target filename with proper extension
   const targetName = filename.includes('.') ? filename : `${filename}.md`;
+
+  // Check cache first
+  pruneFilePathCache();
+  const cached = filePathCache.get(targetName);
+  if (cached) {
+    return cached.path;
+  }
+
   console.log('Searching for file:', filename, '-> target:', targetName);
 
   async function searchDirectory(path: string): Promise<string | null> {
     try {
       const listing = await contents.get(path, { content: true });
-      
+
       if (listing.type !== 'directory' || !listing.content) {
         return null;
       }
 
       console.log(`Searching in directory: ${path || 'root'}, found ${listing.content.length} items`);
-      
+
       for (const item of listing.content as Contents.IModel[]) {
         console.log(`  - ${item.name} (${item.type})`);
         if ((item.type === 'file' || item.type === 'notebook') && item.name === targetName) {
@@ -165,11 +219,16 @@ async function findFile(
     } catch (error) {
       console.error(`Error searching directory ${path}:`, error);
     }
-    
+
     return null;
   }
 
-  return searchDirectory('');
+  const result = await searchDirectory('');
+
+  // Store result in cache
+  filePathCache.set(targetName, { path: result, timestamp: Date.now() });
+
+  return result;
 }
 
 /**
@@ -774,17 +833,36 @@ export const wikilinkPlugin: JupyterFrontEndPlugin<void> = {
     `;
     document.head.appendChild(style);
     
+    // Invalidate file path cache when files change
+    docManager.services.contents.fileChanged.connect(() => {
+      invalidateFilePathCache();
+    });
+
+    // Clean up wikilink mappings when editor widgets are closed
+    editorTracker.widgetAdded.connect((sender, widget) => {
+      widget.disposed.connect(() => {
+        clearWikilinkMappingsForDocument(widget.context.path);
+      });
+    });
+
+    // Clean up wikilink mappings when markdown preview widgets are closed
+    markdownTracker.widgetAdded.connect((sender, widget) => {
+      widget.disposed.connect(() => {
+        clearWikilinkMappingsForDocument(widget.context.path);
+      });
+    });
+
     // Set up auto-save for all markdown files
     editorTracker.widgetAdded.connect((sender, widget) => {
       if (widget.context.path.endsWith('.md')) {
         // Enable auto-save with a 2-second delay
         let saveTimeout: NodeJS.Timeout | null = null;
-        
+
         widget.context.model.contentChanged.connect(() => {
           if (saveTimeout) {
             clearTimeout(saveTimeout);
           }
-          
+
           saveTimeout = setTimeout(() => {
             if (widget.context.model.dirty) {
               widget.context.save().catch(error => {

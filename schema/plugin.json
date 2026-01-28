@@ -1,0 +1,55 @@
+{
+  "title": "PKM Extension",
+  "description": "Personal Knowledge Management extension settings for JupyterLite",
+  "type": "object",
+  "properties": {
+    "startFile": {
+      "type": "string",
+      "title": "Start File",
+      "description": "Path to the markdown file to open automatically on startup (e.g., 'start.md').",
+      "default": "start.md"
+    },
+    "showWelcome": {
+      "type": "boolean",
+      "title": "Show Welcome Dialog",
+      "description": "Show the welcome dialog on first visit.",
+      "default": true
+    },
+    "defaultMarkdownMode": {
+      "type": "string",
+      "title": "Default Markdown Mode",
+      "description": "Default mode for opening markdown files.",
+      "enum": ["edit", "preview"],
+      "default": "preview"
+    },
+    "autoSaveDelay": {
+      "type": "number",
+      "title": "Auto-save Delay (ms)",
+      "description": "Delay in milliseconds before auto-saving markdown files. Set to 0 to disable auto-save.",
+      "default": 2000,
+      "minimum": 0,
+      "maximum": 60000
+    },
+    "enableBlockEmbedding": {
+      "type": "boolean",
+      "title": "Enable Block Embedding",
+      "description": "Enable ![[file#block]] embedding syntax in markdown.",
+      "default": true
+    },
+    "enableWikilinkCompletion": {
+      "type": "boolean",
+      "title": "Enable Wikilink Completion",
+      "description": "Enable auto-completion when typing [[ in markdown files.",
+      "default": true
+    },
+    "filePathCacheTTL": {
+      "type": "number",
+      "title": "File Path Cache TTL (ms)",
+      "description": "Time-to-live for file path resolution cache entries in milliseconds.",
+      "default": 10000,
+      "minimum": 1000,
+      "maximum": 300000
+    }
+  },
+  "additionalProperties": false
+}

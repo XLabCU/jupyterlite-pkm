@@ -15,6 +15,7 @@ import { notebookEmbedPlugin } from './notebook-embed';
 import { blockEmbeddingPlugin } from './block-embedding';
 import { codeCopyPlugin } from './code-copy';
 import { welcomePlugin } from './welcome';
+import { exportPlugin } from './export';
 
 /**
  * The main extension that combines all PKM features
@@ -46,5 +47,6 @@ export default [
   codeCopyPlugin,
   searchPlugin,
   backlinksPlugin,
-  notebookEmbedPlugin
+  notebookEmbedPlugin,
+  exportPlugin
 ];
