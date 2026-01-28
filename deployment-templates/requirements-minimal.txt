@@ -1,0 +1,17 @@
+# =============================================================================
+# JupyterLite PKM Teaching Site - Minimal Requirements
+# =============================================================================
+# Use this for faster builds and smaller deployments.
+# Only Python kernel, no extra visualizations or themes.
+# =============================================================================
+
+# Core
+jupyterlite-core==0.5.0
+jupyterlab~=4.3.4
+notebook~=7.3.2
+
+# Python kernel only
+jupyterlite-pyodide-kernel==0.5.0
+
+# Basic widgets
+ipywidgets>=8.1.3,<9

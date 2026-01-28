@@ -1,0 +1,44 @@
+{
+  "$schema": "https://jupyterlite.readthedocs.io/en/latest/_static/schema/jupyterlite.v0.schema.json",
+  "jupyter-lite-schema-version": 0,
+  "jupyter-config-data": {
+    "appName": "My Teaching Site",
+    "appVersion": "1.0.0",
+    "appUrl": "./lab",
+    "exposeAppInBrowser": true,
+    "collaborative": false,
+    "settingsOverrides": {
+      "@jupyterlab/apputils-extension:themes": {
+        "theme": "JupyterLab Light"
+      },
+      "@jupyterlab/docmanager-extension:plugin": {
+        "autosave": true,
+        "autosaveInterval": 60,
+        "defaultViewers": {
+          ".md": "Markdown Preview"
+        }
+      },
+      "@jupyterlab/notebook-extension:tracker": {
+        "codeCellConfig": {
+          "lineNumbers": true,
+          "autoClosingBrackets": true
+        },
+        "markdownCellConfig": {
+          "lineNumbers": false
+        },
+        "recordTiming": false
+      },
+      "@jupyterlab/fileeditor-extension:plugin": {
+        "editorConfig": {
+          "lineNumbers": true,
+          "tabSize": 2
+        }
+      },
+      "@jupyterlab/terminal-extension:plugin": {
+        "shutdownOnClose": true
+      }
+    },
+    "disabledExtensions": [],
+    "federated_extensions": []
+  }
+}

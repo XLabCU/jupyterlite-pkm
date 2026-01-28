@@ -1,0 +1,107 @@
+# =============================================================================
+# JupyterLite PKM Teaching Site - Requirements
+# =============================================================================
+# Copy this file to your teaching site repository and customize as needed.
+# See: https://github.com/XLabCU/jupyterlite-pkm/docs/DEPLOYMENT_GUIDE.md
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Core (Required)
+# -----------------------------------------------------------------------------
+jupyterlite-core==0.5.0
+jupyterlab~=4.3.4
+notebook~=7.3.2
+
+# -----------------------------------------------------------------------------
+# Kernels - Uncomment the ones you need
+# -----------------------------------------------------------------------------
+
+# Python kernel via Pyodide (most common choice)
+jupyterlite-pyodide-kernel==0.5.0
+
+# JavaScript kernel (web development courses)
+jupyterlite-javascript-kernel==0.3.0
+
+# P5.js kernel (creative coding, visual arts)
+jupyterlite-p5-kernel==0.1.0
+
+# R kernel (WebR) - Installed separately in workflow
+# pip install jupyterlite-webr-kernel
+
+# -----------------------------------------------------------------------------
+# Language Packs - Uncomment for non-English interfaces
+# -----------------------------------------------------------------------------
+# jupyterlab-language-pack-fr-FR
+# jupyterlab-language-pack-zh-CN
+# jupyterlab-language-pack-es-ES
+# jupyterlab-language-pack-de-DE
+# jupyterlab-language-pack-ja-JP
+# jupyterlab-language-pack-pt-BR
+
+# -----------------------------------------------------------------------------
+# File Renderers - Domain-specific file support
+# -----------------------------------------------------------------------------
+
+# FASTA files (bioinformatics)
+jupyterlab-fasta>=3.3.0,<4
+
+# GeoJSON files (geography, GIS, mapping)
+jupyterlab-geojson>=3.4.0,<4
+
+# -----------------------------------------------------------------------------
+# UI Enhancements
+# -----------------------------------------------------------------------------
+
+# Guided tour for student onboarding
+jupyterlab-tour
+
+# Dark themes (popular with students)
+jupyterlab-night
+jupyterlab_miami_nights
+
+# File system access (download/upload from local)
+jupyterlab-filesystem-access
+
+# -----------------------------------------------------------------------------
+# Interactive Widgets (Pyodide-compatible)
+# -----------------------------------------------------------------------------
+
+# Core widgets
+ipywidgets>=8.1.3,<9
+
+# Event handling
+ipyevents>=2.0.1
+
+# Interactive matplotlib
+ipympl>=0.8.2
+
+# Canvas drawing
+ipycanvas>=0.9.1
+
+# Interactive maps
+ipyleaflet
+
+# -----------------------------------------------------------------------------
+# Visualization Libraries (Pyodide-compatible)
+# -----------------------------------------------------------------------------
+
+# Plotly interactive charts
+plotly>=5,<6
+
+# BQPlot (2D plotting)
+bqplot
+
+# Matplotlib (standard plotting)
+matplotlib
+
+# -----------------------------------------------------------------------------
+# Note: These packages are available in Pyodide runtime automatically:
+# - numpy
+# - pandas
+# - scipy
+# - scikit-learn
+# - networkx
+# - sympy
+# - statsmodels
+# See full list: https://pyodide.org/en/stable/usage/packages-in-pyodide.html
+# -----------------------------------------------------------------------------
