@@ -16,6 +16,7 @@ import { blockEmbeddingPlugin } from './block-embedding';
 import { codeCopyPlugin } from './code-copy';
 import { welcomePlugin } from './welcome';
 import { exportPlugin } from './export';
+import { graphPlugin } from './graph';
 
 /**
  * The main extension that combines all PKM features
@@ -48,5 +49,6 @@ export default [
   searchPlugin,
   backlinksPlugin,
   notebookEmbedPlugin,
-  exportPlugin
+  exportPlugin,
+  graphPlugin
 ];
